@@ -7,7 +7,6 @@ from glob import glob
 from io import BytesIO
 from PIL import Image
 
-
 # Returns a list of matching patterns
 def get_files(patterns):
     files = []
@@ -49,7 +48,7 @@ def download_images(html_text, image_label, counter=0):
                 continue
             # Add missing file extension (.jpg for now)
             if file_extension.find('.') == -1:
-                file_extension = 'jpg'
+                file_extension = '.jpg'
 
             # Add missing HTTPS
             if not image_url.startswith('http'):
