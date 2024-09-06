@@ -5,4 +5,5 @@ A webscraper for images of clothing on the internet.
 TBA
 
 ## Requirements
-TBA
+Python3
+venv (Optional)
