@@ -14,7 +14,6 @@ def get_files(patterns):
         files.extend(glob(pattern))
     return files
 
-
 # Convert list to CSV file
 def save_to_csv(items, filename):
     if not items:
@@ -27,11 +26,28 @@ def save_to_csv(items, filename):
 
 # Check the image url to ensure validity before fetching
 def check_image_link(image_url):
-    return True
+    output_url = image_url
+    # Patch for files with bad file extension
+    if output_url.find('?') >= 0:
+        output_url = image_url[:image_url.find('?')]
+    
+    # Add missing HTTPS
+    if not output_url.startswith('http'):
+        output_url = 'https:' + output_url
+
+    return output_url
 
 # Image Pre-check before saving to disk
-def check_image(image):
-    return True
+def precheck_image(image):
+    # Skip files less than 8kB
+    if len(image) >= 8000:
+        # Skip grayscale images
+        img = Image.open(BytesIO(image))
+        img = img.convert('RGB')
+        is_grayscale = all(r == g == b for r, g, b in img.getdata())
+        if not is_grayscale:
+            return True
+    return False
 
 # Downloads images and its content
 def download_images(html_text, image_label, counter=0):
@@ -43,13 +59,9 @@ def download_images(html_text, image_label, counter=0):
 
     images = html_text.find_all('img')
     for image in images:
-        image_url = image.get('src')
-        if image_url:
-            check_image_link(image_url)
-
-            # Patch for files with bad file extension
-            if image_url.find('?') >= 0:
-                image_url = image_url[:image_url.find('?')]
+        temp_image_url = image.get('src')
+        if temp_image_url:
+            image_url = check_image_link(temp_image_url)
 
             # Skip files with bad file extension (.svg)
             file_extension = os.path.splitext(image_url)[-1].lower()
@@ -58,10 +70,6 @@ def download_images(html_text, image_label, counter=0):
             # Add missing file extension (.jpg for now)
             if file_extension.find('.') == -1:
                 file_extension = '.jpg'
-
-            # Add missing HTTPS
-            if not image_url.startswith('http'):
-                image_url = 'https:' + image_url
 
             # Download the image
             try:
@@ -72,40 +80,30 @@ def download_images(html_text, image_label, counter=0):
 
             # Check if image is a duplicate
             if True:
-                check_image(image_data)
 
-                # Skip files less than 8kB
-                if len(image_data) < 8000:
-                    continue
+                # Verify image is not grayscale or less than 8kB
+                if precheck_image(image_data):
+                    # Save image to folder
+                    image_name = os.path.join(image_label.replace(' ', '_').lower(), f"{image_label}{counter}{file_extension}")
+                    with open(image_name, 'wb') as f:
+                        f.write(image_data)
 
-                # Skip grayscale images
-                img = Image.open(BytesIO(image_data))
-                img = img.convert('RGB')
-                is_grayscale = all(r == g == b for r, g, b in img.getdata())
-                if is_grayscale:
-                    continue
+                    # Save item metadata
+                    image_info = {
+                        'img_url': image_url,
+                        'img_name': image_name,
+                        'img_label': image_label
+                    }
+                    image_metadata.append(image_info)
 
-                # Save image to folder
-                image_name = os.path.join(image_label.replace(' ', '_').lower(), f"{image_label}{counter}{file_extension}")
-                with open(image_name, 'wb') as f:
-                    f.write(image_data)
+                    # Create file for Google Vertex
+                    vertex = {
+                        'img_dir': "gs://cloud-ml-data/{}".format(image_name),  # Change directory as necessary
+                        'label': image_label
+                    }
+                    google_vertex.append(vertex)
 
-                # Save item metadata
-                image_info = {
-                    'img_url': image_url,
-                    'img_name': image_name,
-                    'img_label': image_label
-                }
-                image_metadata.append(image_info)
-
-                # Create file for Google Vertex
-                vertex = {
-                    'img_dir': "gs://cloud-ml-data/{}".format(image_name),  # Change directory as necessary
-                    'label': image_label
-                }
-                google_vertex.append(vertex)
-
-                counter += 1
+                    counter += 1
 
     return {
         'image_metadata': image_metadata,
