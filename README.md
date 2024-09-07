@@ -11,5 +11,7 @@ A webscraper for images of clothing on the internet.
 
 ## Requirements
 [Python 3](https://www.python.org/downloads/)
+
 [pip](https://docs.python.org/3/installing/index.html)
+
 (Optional): [venv](https://packaging.python.org/en/latest/tutorials/installing-packages/#creating-virtual-environments)

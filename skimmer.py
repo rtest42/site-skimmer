@@ -25,6 +25,13 @@ def save_to_csv(items, filename):
         dict_writer.writeheader()
         dict_writer.writerows(items)
 
+# Check the image url to ensure validity before fetching
+def check_image_link(image_url):
+    return True
+
+# Image Pre-check before saving to disk
+def check_image(image):
+    return True
 
 # Downloads images and its content
 def download_images(html_text, image_label, counter=0):
@@ -38,6 +45,8 @@ def download_images(html_text, image_label, counter=0):
     for image in images:
         image_url = image.get('src')
         if image_url:
+            check_image_link(image_url)
+
             # Patch for files with bad file extension
             if image_url.find('?') >= 0:
                 image_url = image_url[:image_url.find('?')]
@@ -61,38 +70,42 @@ def download_images(html_text, image_label, counter=0):
                 print("Invalid URL: ", e)
                 continue
 
-            # Skip files less than 8kB
-            if len(image_data) < 8000:
-                continue
+            # Check if image is a duplicate
+            if True:
+                check_image(image_data)
 
-            # Skip grayscale images
-            img = Image.open(BytesIO(image_data))
-            img = img.convert('RGB')
-            is_grayscale = all(r == g == b for r, g, b in img.getdata())
-            if is_grayscale:
-                continue
+                # Skip files less than 8kB
+                if len(image_data) < 8000:
+                    continue
 
-            # Save image to folder
-            image_name = os.path.join(image_label.replace(' ', '_').lower(), f"{image_label}{counter}{file_extension}")
-            with open(image_name, 'wb') as f:
-                f.write(image_data)
+                # Skip grayscale images
+                img = Image.open(BytesIO(image_data))
+                img = img.convert('RGB')
+                is_grayscale = all(r == g == b for r, g, b in img.getdata())
+                if is_grayscale:
+                    continue
 
-            # Save item metadata
-            image_info = {
-                'img_url': image_url,
-                'img_name': image_name,
-                'img_label': image_label
-            }
-            image_metadata.append(image_info)
+                # Save image to folder
+                image_name = os.path.join(image_label.replace(' ', '_').lower(), f"{image_label}{counter}{file_extension}")
+                with open(image_name, 'wb') as f:
+                    f.write(image_data)
 
-            # Create file for Google Vertex
-            vertex = {
-                'img_dir': "gs://cloud-ml-data/{}".format(image_name),  # Change directory as necessary
-                'label': image_label
-            }
-            google_vertex.append(vertex)
+                # Save item metadata
+                image_info = {
+                    'img_url': image_url,
+                    'img_name': image_name,
+                    'img_label': image_label
+                }
+                image_metadata.append(image_info)
 
-            counter += 1
+                # Create file for Google Vertex
+                vertex = {
+                    'img_dir': "gs://cloud-ml-data/{}".format(image_name),  # Change directory as necessary
+                    'label': image_label
+                }
+                google_vertex.append(vertex)
+
+                counter += 1
 
     return {
         'image_metadata': image_metadata,
@@ -120,17 +133,18 @@ def main():
     label = input("Enter a label: ")
     image_count = 0
 
-    # Open files
+    # Open and read all the text files
     for file in files:
         with open(file, 'r', encoding="utf8") as f:
             print(f"Opening {file}")
 
-            # Read text
+            # Read and parse text
             data = f.read()
-            # Parse text
             parsed_data = BeautifulSoup(data, 'html.parser')
-            # Get metadata
+
+            # Fetch metadata
             metadata = download_images(parsed_data, label, image_count)
+
             # Update counter
             image_count = metadata['counter']
             # Put images into CSV file
