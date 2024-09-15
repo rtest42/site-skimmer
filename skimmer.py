@@ -1,11 +1,14 @@
 import csv
 # import cv2  # Duplicate images
+import itertools
 import numpy as np  # Duplicate images
 import os
 import requests
 import sys
+import time
 import torch.cuda
 from bs4 import BeautifulSoup
+from concurrent.futures import ThreadPoolExecutor  # Threading
 from glob import glob
 from io import BytesIO
 # For duplicate images
@@ -16,14 +19,16 @@ from keras.models import Model
 from PIL import Image
 from transformers import pipeline
 
+start_time = time.time()
+
 # Prefer GPU (0) over CPU (-1)
 device = 0 if torch.cuda.is_available() else -1
 # Initialize segmentation pipeline
 segmenter = pipeline(model="mattmdjaga/segformer_b2_clothes", device=device)
 
 # Get list of clothing categories
-with open('categories.txt', 'r') as category_file:
-    clothing_categories = category_file.readlines()
+with open('categories.txt', 'r') as f:
+    clothing_categories = f.readlines()
 
 # Load the VGG16 model pre-trained on ImageNet
 if os.path.isfile('vgg16_weights_tf_dim_ordering_tf_kernels.h5'):
@@ -31,9 +36,6 @@ if os.path.isfile('vgg16_weights_tf_dim_ordering_tf_kernels.h5'):
 else:
     base_model = VGG16(weights='imagenet')
 model = Model(inputs=base_model.input, outputs=base_model.get_layer('fc1').output)
-
-# Hold the image vectors
-image_vectors = []
 
 
 # Returns a list of matching patterns
@@ -166,87 +168,84 @@ def batch_segment_clothing(img_dir, out_dir, clothes=None):
             print(f"Skipping {filename} as it is not a supported image file.")
 
 
+# Helper function for downloading images
+def download_image(image_url, image_label, counter, image_model, image_vectors):
+    # Make image URL valid
+    image_url = check_image_link(image_url)
+
+    # Skip files with bad file extension (.svg)
+    file_extension = os.path.splitext(image_url)[-1].lower()
+    if file_extension.find('.svg') != -1:
+        return
+
+    # Add missing file extension (.jpg for now)
+    if file_extension.find('.') == -1:
+        file_extension = '.jpg'
+
+    # Download the image
+    try:
+        image_data = requests.get(image_url).content
+    except requests.exceptions.InvalidURL as e:
+        print(e)
+        return
+
+    if not pre_check_image(image_data):
+        return
+
+    num = next(counter)
+    image_name = os.path.join(image_label, f"{image_label}{num}{file_extension}")
+    with open(image_name, 'wb') as f:
+        f.write(image_data)
+
+    # Get image vector
+    feature = extract_features(image_name, image_model)
+    # Check if image is a duplicate (using five images before as comparison)
+    # for image_vector in image_vectors:  # [-5:]:
+    #    if cosine_similarity(feature, image_vector) > 0.8:
+    #        print(f"Found duplicate image {counter}")
+    #        os.remove(image_name)
+    #        return
+
+    # Unique image
+    image_vectors.append(feature)
+    print(f"Fetched image {num}")
+
+    return {
+        'img_url': image_url,
+        'img_name': image_name,
+        'img_label': image_label
+    }
+
+
 # Downloads images and its content
-def download_images(html_text, image_label, counter=0):
+def download_images(html_text, image_label, image_model):
+    image_vectors = []
     image_metadata = []
     google_vertex = []
+    counter = itertools.count(0)
 
     # Create a directory to save images
     os.makedirs(image_label, exist_ok=True)
 
     images = html_text.find_all('img')
-    for image in images:
-        temp_image_url = image.get('src')
-        if temp_image_url:
-            image_url = check_image_link(temp_image_url)
+    # Utilize threading to download multiple images at once
+    with ThreadPoolExecutor() as executor:
+        future_to_image = {executor.submit(download_image, img.get('src'), image_label, counter, model, image_vectors) for img in images}
 
-            # Skip files with bad file extension (.svg)
-            file_extension = os.path.splitext(image_url)[-1].lower()
-            if file_extension.find('.svg') != -1:
-                continue
-
-            # Add missing file extension (.jpg for now)
-            if file_extension.find('.') == -1:
-                file_extension = '.jpg'
-
-            # Download the image
-            try:
-                image_data = requests.get(image_url).content
-            except requests.exceptions.InvalidURL as e:
-                print(e)
-                continue
-
-            # Verify image is not grayscale or less than 8kB
-            if pre_check_image(image_data):
-                # Save image to folder
-                image_name = os.path.join(image_label, f"{image_label}{counter}{file_extension}")
-                with open(image_name, 'wb') as f:
-                    f.write(image_data)
-
-                # Get image vector
-                feature = extract_features(image_name, model)
-                # Check if image is a duplicate (using five images before as comparison)
-                global image_vectors
-                is_duplicate = False
-                for image_vector in image_vectors:  # [-5:]:
-                    if cosine_similarity(feature, image_vector) > 0.8:
-                        print("Found duplicate image " + str(counter))
-                        os.remove(image_name)
-                        is_duplicate = True
-                        break
-
-                if is_duplicate:
-                    continue
-
-                # Append image vector
-                image_vectors.append(feature)
-                # Only keep the latest 5 images
-                # if len(image_vectors) > 5:
-                #    image_vectors.pop(0)
-
-                print("Fetched image " + str(counter))
-
-                # Save item metadata
-                image_info = {
-                    'img_url': image_url,
-                    'img_name': image_name,
-                    'img_label': image_label
-                }
-                image_metadata.append(image_info)
-
-                # Create file for Google Vertex
-                vertex = {
-                    'img_dir': f"gs://cloud-ml-data/{image_name}",  # Change directory as necessary
-                    'label': image_label
-                }
-                google_vertex.append(vertex)
-
-                counter += 1
+    print(len(image_vectors))
+    # Get data for CSV files
+    for future in future_to_image:
+        metadata = future.result()
+        if metadata:
+            image_metadata.append(metadata)
+            google_vertex.append({
+                'img_dir': f"gs://cloud-ml-data/{metadata['img_name']}",  # Change directory as necessary
+                'label': metadata['img_label']
+            })
 
     return {
         'image_metadata': image_metadata,
-        'google_vertex': google_vertex,
-        'counter': counter
+        'google_vertex': google_vertex
     }
 
 
@@ -260,8 +259,7 @@ def main():
 
     # Get list of files
     seg_mode = parse_seg_mode(int(sys.argv[1]))
-    args = sys.argv[2:]
-    files = get_files(args)
+    files = get_files(sys.argv[2:])
 
     if files is None:
         print("ERROR: No files found!")
@@ -280,7 +278,7 @@ def main():
             parsed_data = BeautifulSoup(data, 'html.parser')
 
             # Fetch metadata
-            metadata = download_images(parsed_data, label, image_count)
+            metadata = download_images(parsed_data, label, model)
             # Create a directory to save images
             label_name = label
             os.makedirs(label_name, exist_ok=True)
@@ -292,13 +290,13 @@ def main():
             batch_segment_clothing(input_dir, output_dir, clothes=seg_mode)
 
             # Update counter
-            image_count = metadata['counter']
+            # image_count = metadata['counter']
             # Put images into CSV file
             save_to_csv(metadata['image_metadata'], f"items_metadata_{label}.csv")
             save_to_csv(metadata['google_vertex'], f"google_vertex_{label}.csv")
 
-    print("Done.")
-
 
 if __name__ == '__main__':
+    start_time = time.time()
     main()
+    print("Done. Time elapsed: ", time.time() - start_time, " seconds")
