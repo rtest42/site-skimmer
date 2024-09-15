@@ -7,4 +7,12 @@ pyvenv.cfg
 
 example*.txt
 khaki/
+output/
+input/
 *.csv
+
+.idea/
+
+*.h5
+
+.DS_Store

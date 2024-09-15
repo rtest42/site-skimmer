@@ -1,0 +1,9 @@
+Hat
+Upper-clothes
+Skirt
+Pants
+Dress
+Belt
+Left-shoe
+Right-shoe
+Scarf

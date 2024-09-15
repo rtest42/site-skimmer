@@ -1,23 +1,40 @@
 import csv
+# import cv2  # Duplicate images
+import numpy as np  # Duplicate images
 import os
 import requests
 import sys
+import torch.cuda
 from bs4 import BeautifulSoup
 from glob import glob
 from io import BytesIO
-from PIL import Image
 # For duplicate images
 from keras.applications.vgg16 import VGG16, preprocess_input
 from keras.preprocessing import image
 from keras.models import Model
-import numpy as np
-import cv2
-# For clothing segment
-from transformers import pipeline
+# Clothing segment
 from PIL import Image
+from transformers import pipeline
 
+# Prefer GPU (0) over CPU (-1)
+device = 0 if torch.cuda.is_available() else -1
 # Initialize segmentation pipeline
-segmenter = pipeline(model="mattmdjaga/segformer_b2_clothes")
+segmenter = pipeline(model="mattmdjaga/segformer_b2_clothes", device=device)
+
+# Get list of clothing categories
+with open('categories.txt', 'r') as category_file:
+    clothing_categories = category_file.readlines()
+
+# Load the VGG16 model pre-trained on ImageNet
+if os.path.isfile('vgg16_weights_tf_dim_ordering_tf_kernels.h5'):
+    base_model = VGG16(weights='vgg16_weights_tf_dim_ordering_tf_kernels.h5')
+else:
+    base_model = VGG16(weights='imagenet')
+model = Model(inputs=base_model.input, outputs=base_model.get_layer('fc1').output)
+
+# Hold the image vectors
+image_vectors = []
+
 
 # Returns a list of matching patterns
 def get_files(patterns):
@@ -26,8 +43,9 @@ def get_files(patterns):
         files.extend(glob(pattern))
     return files
 
+
 # Convert list to CSV file
-def save_to_csv(items, filename):
+def save_to_csv(items, filename) -> None:
     if not items:
         return
     keys = items[0].keys()
@@ -36,8 +54,9 @@ def save_to_csv(items, filename):
         dict_writer.writeheader()
         dict_writer.writerows(items)
 
+
 # Check the image url to ensure validity before fetching
-def check_image_link(image_url):
+def check_image_link(image_url) -> str:
     output_url = image_url
     # Patch for files with bad file extension
     if output_url.find('?') >= 0:
@@ -49,74 +68,63 @@ def check_image_link(image_url):
 
     return output_url
 
-# Image Pre-check before saving to disk
-def precheck_image(image):
-    # Skip files less than 8kB
-    if (len(image) >= 8000):
-        # Skip grayscale images
-        img = Image.open(BytesIO(image))
-        img = img.convert('RGB')
-        is_grayscale = all(r == g == b for r, g, b in img.getdata())
-        if not is_grayscale:
-            return True
-    return False
 
-# Subfunctions for duplicate images
-def extract_features(img_path, model):
+# Image pre-check before saving to disk
+def pre_check_image(image) -> bool:
+    # Skip files less than 8kB
+    if len(image) < 8000:
+        return False
+
+    # Skip grayscale images
+    img = Image.open(BytesIO(image))
+    img = img.convert('RGB')
+    is_grayscale = all(r == g == b for r, g, b in img.getdata())
+    return not is_grayscale
+
+
+# Sub-functions for duplicate images
+def extract_features(img_path, image_model):
     img = image.load_img(img_path, target_size=(224, 224))
     img_data = image.img_to_array(img)
     img_data = np.expand_dims(img_data, axis=0)
     img_data = preprocess_input(img_data)
-    features = model.predict(img_data)
+    features = image_model.predict(img_data)
     return features
-def cosine_similarity(featuresA, featuresB):
-    dot_product = np.dot(featuresA, featuresB.T)
-    normA = np.linalg.norm(featuresA)
-    normB = np.linalg.norm(featuresB)
-    return dot_product / (normA * normB)
 
-# Checks if two images are similar
-def check_for_duplicates(base_image_path, comparison_image_path):
-    # Load the VGG16 model pre-trained on ImageNet
-    base_model = VGG16(weights='imagenet')
-    model = Model(inputs=base_model.input, outputs=base_model.get_layer('fc1').output)
-    # Extract features from the two images
-    featuresA = extract_features(base_image_path, model)
-    featuresB = extract_features(comparison_image_path, model)
 
-    # Compare the features using cosine similarity
-    similarity_score = cosine_similarity(featuresA, featuresB)
+# Function to check image similarity
+def cosine_similarity(features_a, features_b):
+    dot_product = np.dot(features_a, features_b.T)
+    norm_a = np.linalg.norm(features_a)
+    norm_b = np.linalg.norm(features_b)
+    return dot_product / (norm_a * norm_b)
 
-    # Determine if the images are very similar
-    threshold = 0.80
-    if (similarity_score > threshold):
-        return True
-    return False
 
 # Given a decimal convert to bitmap
 def parse_seg_mode(value):
-    options = ["Hat", "Upper-clothes", "Skirt", "Pants", "Dress", "Belt", "Left-shoe", "Right-shoe", "Scarf"]
+    options = clothing_categories
     output = []
     value_binary = str(bin(value)[2:].zfill(len(options)))
 
     for i in range(len(value_binary)):
-        if (value_binary[i] == '1'):
+        if value_binary[i] == '1':
             output.append(options[i])
 
     return output
 
-def segment_clothing(img, clothes= ["Hat", "Upper-clothes", "Skirt", "Pants", "Dress", "Belt", "Left-shoe", "Right-shoe", "Scarf"]):
+
+def segment_clothing(img, clothes=None):
+    clothes = clothes or clothing_categories
     # Segment image
     segments = segmenter(img)
 
     # Create list of masks
     mask_list = []
-    for s in segments:
-        if(s['label'] in clothes):
-            mask_list.append(s['mask'])
+    for seg in segments:
+        if seg['label'] in clothes:
+            mask_list.append(seg['mask'])
 
-
-    # Paste all masks on top of eachother
+    # Paste all masks on top of each other
     final_mask = np.array(mask_list[0])
     for mask in mask_list:
         current_mask = np.array(mask)
@@ -131,14 +139,14 @@ def segment_clothing(img, clothes= ["Hat", "Upper-clothes", "Skirt", "Pants", "D
     return img
 
 
-def batch_segment_clothing(img_dir, out_dir, clothes= ["Hat", "Upper-clothes", "Skirt", "Pants", "Dress", "Belt", "Left-shoe", "Right-shoe", "Scarf"]):
+def batch_segment_clothing(img_dir, out_dir, clothes=None):
+    clothes = clothes or clothing_categories
     # Create output directory if it doesn't exist
-    if not os.path.exists(out_dir):
-        os.makedirs(out_dir)
+    os.makedirs(out_dir, exist_ok=True)
 
     # Iterate through each file in the input directory
     for filename in os.listdir(img_dir):
-        if filename.endswith(".jpg") or filename.endswith(".JPG") or filename.endswith(".png") or filename.endswith(".PNG"):
+        if filename[filename.find('.'):] in ['.jpg', '.JPG', '.png', '.PNG']:
             try:
                 # Load image
                 img_path = os.path.join(img_dir, filename)
@@ -152,12 +160,11 @@ def batch_segment_clothing(img_dir, out_dir, clothes= ["Hat", "Upper-clothes", "
                 segmented_img.save(out_path)
 
                 print(f"Segmented {filename} successfully.")
-
-            except Exception as e:
+            except IndexError as e:
                 print(f"Error processing {filename}: {e}")
-
         else:
             print(f"Skipping {filename} as it is not a supported image file.")
+
 
 # Downloads images and its content
 def download_images(html_text, image_label, counter=0):
@@ -165,7 +172,7 @@ def download_images(html_text, image_label, counter=0):
     google_vertex = []
 
     # Create a directory to save images
-    os.makedirs(image_label.replace(' ', '_').lower(), exist_ok=True)
+    os.makedirs(image_label, exist_ok=True)
 
     images = html_text.find_all('img')
     for image in images:
@@ -177,6 +184,7 @@ def download_images(html_text, image_label, counter=0):
             file_extension = os.path.splitext(image_url)[-1].lower()
             if file_extension.find('.svg') != -1:
                 continue
+
             # Add missing file extension (.jpg for now)
             if file_extension.find('.') == -1:
                 file_extension = '.jpg'
@@ -185,18 +193,38 @@ def download_images(html_text, image_label, counter=0):
             try:
                 image_data = requests.get(image_url).content
             except requests.exceptions.InvalidURL as e:
-                print("Invalid URL: ", e)
+                print(e)
                 continue
 
             # Verify image is not grayscale or less than 8kB
-            if precheck_image(image_data):
+            if pre_check_image(image_data):
                 # Save image to folder
-                image_name = os.path.join(image_label.replace(' ', '_').lower(), f"{image_label}{counter}{file_extension}")
+                image_name = os.path.join(image_label, f"{image_label}{counter}{file_extension}")
                 with open(image_name, 'wb') as f:
                     f.write(image_data)
 
-                print("Fetched image " + str(counter))
+                # Get image vector
+                feature = extract_features(image_name, model)
                 # Check if image is a duplicate (using five images before as comparison)
+                global image_vectors
+                is_duplicate = False
+                for image_vector in image_vectors:  # [-5:]:
+                    if cosine_similarity(feature, image_vector) > 0.8:
+                        print("Found duplicate image " + str(counter))
+                        os.remove(image_name)
+                        is_duplicate = True
+                        break
+
+                if is_duplicate:
+                    continue
+
+                # Append image vector
+                image_vectors.append(feature)
+                # Only keep the latest 5 images
+                # if len(image_vectors) > 5:
+                #    image_vectors.pop(0)
+
+                print("Fetched image " + str(counter))
 
                 # Save item metadata
                 image_info = {
@@ -208,7 +236,7 @@ def download_images(html_text, image_label, counter=0):
 
                 # Create file for Google Vertex
                 vertex = {
-                    'img_dir': "gs://cloud-ml-data/{}".format(image_name),  # Change directory as necessary
+                    'img_dir': f"gs://cloud-ml-data/{image_name}",  # Change directory as necessary
                     'label': image_label
                 }
                 google_vertex.append(vertex)
@@ -231,13 +259,13 @@ def main():
         sys.exit(1)
 
     # Get list of files
-    seg_mode = parse_seg_mode(int(sys.argv[3]))
-    args = sys.argv[4:]
+    seg_mode = parse_seg_mode(int(sys.argv[1]))
+    args = sys.argv[2:]
     files = get_files(args)
 
     if files is None:
-        print("No files found!")
-        sys.exit(0)
+        print("ERROR: No files found!")
+        sys.exit(1)
 
     label = input("Enter a label: ")
     image_count = 0
@@ -254,7 +282,7 @@ def main():
             # Fetch metadata
             metadata = download_images(parsed_data, label, image_count)
             # Create a directory to save images
-            label_name = label.replace(' ', '_').lower()
+            label_name = label
             os.makedirs(label_name, exist_ok=True)
             input_dir = label_name
             os.makedirs(label_name + "_f", exist_ok=True)
@@ -266,6 +294,11 @@ def main():
             # Update counter
             image_count = metadata['counter']
             # Put images into CSV file
-            save_to_csv(metadata['image_metadata'], 'items_metadata_{}.csv'.format(label.replace(' ', '_').lower()))
-            save_to_csv(metadata['google_vertex'], 'google_vertex_{}.csv'.format(label.replace(' ', '_').lower()))
+            save_to_csv(metadata['image_metadata'], f"items_metadata_{label}.csv")
+            save_to_csv(metadata['google_vertex'], f"google_vertex_{label}.csv")
 
+    print("Done.")
+
+
+if __name__ == '__main__':
+    main()
