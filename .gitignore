@@ -5,14 +5,23 @@ lib/
 lib64
 pyvenv.cfg
 
+# Input and output files and directories
 example*.txt
 khaki/
 output/
 input/
+
+# Output CSV files
 *.csv
 
+# PyCharm
 .idea/
 
+# Image model
 *.h5
 
+# MacOS
 .DS_Store
+
+# Python cache
+__pycache__

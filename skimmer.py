@@ -1,20 +1,17 @@
 import csv
-# import cv2  # Duplicate images
-import itertools
-import numpy as np  # Duplicate images
+import numpy as np
 import os
-import re  # Regex
+import re
 import requests
 import sys
-import tensorflow as tf
 import threading
 import time
 import torch.cuda
 from bs4 import BeautifulSoup
-from concurrent.futures import ThreadPoolExecutor, ProcessPoolExecutor  # Multithreading, multiprocessing
+from concurrent.futures import ThreadPoolExecutor, ProcessPoolExecutor
 from glob import glob
 from io import BytesIO
-# For duplicate images
+# For duplicate images - Keras
 from keras.applications.vgg16 import VGG16, preprocess_input
 from keras.preprocessing import image
 from keras.models import Model
@@ -42,7 +39,7 @@ model = Model(inputs=base_model.input, outputs=base_model.get_layer('fc1').outpu
 
 
 # Returns a list of matching patterns
-def get_files(patterns):
+def get_files(patterns) -> list[str]:
     files = []
     for pattern in patterns:
         files.extend(glob(pattern))
@@ -62,16 +59,15 @@ def save_to_csv(items, filename) -> None:
 
 # Check the image url to ensure validity before fetching
 def check_image_link(image_url) -> str:
-    output_url = image_url
     # Patch for files with bad file extension
-    if output_url.find('?') >= 0:
-        output_url = image_url[:image_url.find('?')]
+    if image_url.find('?') >= 0:
+        image_url = image_url[:image_url.find('?')]
 
     # Add missing HTTPS
-    if not output_url.startswith('http'):
-        output_url = 'https:' + output_url
+    if not image_url.startswith('http'):
+        image_url = 'https:' + image_url
 
-    return output_url
+    return image_url
 
 
 # Image pre-check before saving to disk
@@ -87,46 +83,66 @@ def pre_check_image(image) -> bool:
     return not is_grayscale
 
 
-# Sub-functions for duplicate images
-@tf.function(input_signature=[tf.TensorSpec(shape=[None, 224, 224, 3], dtype=tf.float32)])
-def extract_features(img_path):
+# Sub-function for duplicate images: loading
+# @tf.function(input_signature=[tf.TensorSpec(shape=[None, 224, 224, 3], dtype=tf.float32)])
+def preprocess_image(img_path):
+    # Load image
     img = image.load_img(img_path, target_size=(224, 224))
-    img = tf.cast(img, tf.float32)
     img_data = image.img_to_array(img)
     img_data = np.expand_dims(img_data, axis=0)
     img_data = preprocess_input(img_data)
-    features = model(img_data, training=False)
-    # Get image number from path
-    # Images may not be finished in order, so add a key
-    image_key = re.search(r"\d+\.\D{3,4}$", img_path)
-    image_key = image_key.group(0)
-    image_key = image_key.partition('.')[0]
-    image_key = int(image_key)
-    return {image_key: features.numpy()}  # Return a key as well
+    return img_data
 
 
-# Function for getting image vectors using multiprocessing
-def extract_features_multiprocessing(image_name) -> list:
-    image_vectors = []
-    with ProcessPoolExecutor() as executor:
-        futures = {executor.submit(extract_features, name) for name in image_name}
-
-    for future in futures:
-        image_vectors.append(future.result())
+# Sub-function for duplicate images: extracting
+def extract_features(img_path_chunk) -> dict[int: np.array]:
+    image_vectors = {}
+    for img_path in img_path_chunk:
+        img_data = preprocess_image(img_path)
+        features = model.predict(img_data)
+        # Get image number from path
+        # Images may not be finished in order, so add a key
+        image_key = re.search(r"\d+\.\D{3,4}$", img_path)
+        image_key = image_key.group(0)
+        image_key = image_key.partition('.')[0]
+        image_key = int(image_key)
+        print("Extracted image", image_key)
+        image_vectors[image_key] = features
 
     return image_vectors
 
 
+# Function for getting image vectors using multiprocessing
+def extract_features_multiprocessing(image_names) -> dict[int: np.array]:
+    # Split the list of images
+    cores = os.cpu_count() or 1
+    image_chunks = [image_names[i::cores] for i in range(cores)]
+    features = {}
+    # Test using threads instead of processes
+    with ProcessPoolExecutor(cores) as executor:
+        results = executor.map(extract_features, image_chunks)
+
+    for result in results:
+        # Merge dictionaries (3.9+)
+        features |= result
+        # features.update(result)
+
+    return features
+
+
 # Function to check image similarity
-def cosine_similarity(features_a, features_b):
+def cosine_similarity(features_a, features_b) -> float:
     dot_product = np.dot(features_a, features_b.T)
     norm_a = np.linalg.norm(features_a)
     norm_b = np.linalg.norm(features_b)
-    return dot_product / (norm_a * norm_b)
+    try:
+        return dot_product / (norm_a * norm_b)
+    except ZeroDivisionError:
+        return 1.0  # Undefined; flag as same
 
 
 # Given a decimal convert to bitmap
-def parse_seg_mode(value):
+def parse_seg_mode(value) -> list[str]:
     options = clothing_categories
     output = []
     value_binary = str(bin(value)[2:].zfill(len(options)))
@@ -166,37 +182,42 @@ def segment_clothing(img, clothes=None):
 
 
 # Save segmented clothing
-def batch_segment_clothing(filename, img_dir, out_dir, clothes) -> None:
+def batch_segment_clothing(filename, out_dir, clothes) -> int:
     if filename[filename.find('.'):] not in ['.jpg', '.JPG', '.png', '.PNG']:
         print("Skipping", filename, "as it is not a supported image file.")
-        return
+        return 0
 
     # Iterate through each file in the input directory
     try:
         # Load image
-        img_path = os.path.join(img_dir, filename)
-        img = Image.open(img_path).convert("RGBA")
+        img = Image.open(filename).convert("RGBA")
 
         # Segment clothing
         segmented_img = segment_clothing(img, clothes)
 
         # Save segmented image to output directory as PNG
-        out_path = os.path.join(out_dir, filename.split('.')[0] + ".png")
+        out_path = os.path.join(out_dir, filename.partition('/')[2].partition('.')[0] + ".png")
         segmented_img.save(out_path)
 
         print("Segmented", filename, "successfully.")
+        return 1  # Success in this case
     except IndexError as e:
-        print("Error processing", filename, ":", e)
+        print("Error processing", filename, "-", e)
+        return 0
 
 
 # Segment multiple images
-def batch_segment_clothing_multiprocessing(img_dir, out_dir, clothes=None) -> None:
+def batch_segment_clothing_multiprocessing(img_dir, out_dir, clothes=None) -> int:
     clothes = clothes or clothing_categories
     # Create output directory if it doesn't exist
     os.makedirs(out_dir, exist_ok=True)
+    cores = os.cpu_count() or 1
 
-    with ProcessPoolExecutor() as executor:
-        [executor.submit(batch_segment_clothing, file, img_dir, out_dir, clothes) for file in os.listdir(img_dir)]
+    with ProcessPoolExecutor(cores) as executor:
+        results = {executor.submit(batch_segment_clothing, file, out_dir, clothes)
+                   for file in glob(f"{img_dir}/*")}
+
+    return sum(future.result() for future in results)
 
 
 # Helper function for downloading images
@@ -244,11 +265,11 @@ def download_image(image_url, image_label, counter, counter_lock):
 
 
 # Downloads images and its content
-def download_images(images, image_label):
+def download_images(images, image_label) -> dict:
     image_metadata = []
     google_vertex = []
     counter = [0]  # Make the counter mutable
-    counter_lock = threading.Lock()
+    counter_lock = threading.Lock()  # Lock counter
     # Create a directory to save images
     os.makedirs(image_label, exist_ok=True)
 
@@ -311,16 +332,19 @@ def list_duplicates(image_vectors, num_images, threshold=0.80) -> set[int]:
             # Compare similarity
             similarity = cosine_similarity(image_vectors[i], image_vectors[j])
             if similarity > threshold:
-                print("Duplicate detected:", i, "and", j)
+                print("Duplicate detected: images", i, "and", j)
                 duplicates.add(j)
 
     return duplicates
 
 
 # Remove duplicate images
-def remove_duplicates(duplicate_set, label) -> None:
-    with ThreadPoolExecutor() as executor:
-        executor.map(os.remove, glob(f"{itertools.repeat(label)}/*{duplicate_set}.*"))
+def remove_duplicates(duplicate_set, label) -> int:
+    files_to_remove = [f for num in duplicate_set for f in glob(f"{label}/*{num}.*")]
+    with ThreadPoolExecutor(max_workers=len(files_to_remove)) as executor:
+        executor.map(os.remove, files_to_remove)
+
+    return len(duplicate_set)
 
 
 # The main function receives HTML files as arguments and a label as an input
@@ -364,34 +388,47 @@ def main() -> int:
             break
 
     # Get image tags from all inputted files
+    print("Processing input files...")
     image_tags = extract_tags_multithreading(files)
 
     # Download the images
+    print("Downloading images...")
     image_metadata = download_images(image_tags, label)
-    image_counter = [len(image_metadata['image_metadata'])]
+    image_counter = len(image_metadata['image_metadata'])
 
     # Load images onto image vectors
-    image_directories = [image_name['img_name'] for image_name in image_metadata['image_metadata']]
-    image_vectors = extract_features_multiprocessing(image_directories)
+    print("Processing images...")
+    image_names = [image_name['img_name'] for image_name in image_metadata['image_metadata']]
+    image_vectors = extract_features_multiprocessing(image_names)
 
     # Select all images that are duplicates, then remove them
+    print("Removing duplicates...")
     image_duplicates = list_duplicates(image_vectors, image_counter)
-    remove_duplicates(image_duplicates, label)
+    num_removed = remove_duplicates(image_duplicates, label)
+    print("Removed", num_removed, "files")
 
     # Segment clothing and put them into another folder
     # ["Hat", "Upper-clothes", "Skirt", "Pants", "Dress", "Belt", "Left-shoe", "Right-shoe", "Scarf"]
     #    0          0             0        1        0        0         0             0          0
-    batch_segment_clothing_multiprocessing(label, f"{label}_f", seg_mode)
+    print("Batch segment clothing...")
+    num_batched = batch_segment_clothing_multiprocessing(label, f"{label}_f", seg_mode)
+    print("Batched", num_batched, "items")
 
     # Put images into CSV file
+    print("Saving to CSV...")
     save_to_csv(image_metadata['image_metadata'], f"items_metadata_{label}.csv")
     save_to_csv(image_metadata['google_vertex'], f"google_vertex_{label}.csv")
 
+    new_files = glob(f"{label}_f/*")
+    new_g_vertex = [{'img_dir': f"gs://cloud-ml-data/{new_file}", 'label': label} for new_file in new_files]
+    save_to_csv(new_g_vertex, f"google_vertex_{label}_f.csv")
+
     # Indicate successful run
+    print("Done.")
     return 0
 
 
 if __name__ == '__main__':
     exit_code = main()  # Run program
     print("Program finished with exit code", exit_code)
-    print("Done. Time elapsed:", time.perf_counter() - start_time, "seconds")
+    print("Time elapsed:", time.perf_counter() - start_time, "seconds")
