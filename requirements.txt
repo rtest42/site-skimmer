@@ -8,5 +8,6 @@ keras
 numpy
 opencv-python
 
+tensorflow
 transformers
 torch

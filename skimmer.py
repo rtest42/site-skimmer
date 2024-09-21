@@ -6,6 +6,7 @@ import os
 import re  # Regex
 import requests
 import sys
+import tensorflow as tf
 import threading
 import time
 import torch.cuda
@@ -87,26 +88,28 @@ def pre_check_image(image) -> bool:
 
 
 # Sub-functions for duplicate images
-def extract_features(img_path, image_model):
+@tf.function(input_signature=[tf.TensorSpec(shape=[None, 224, 224, 3], dtype=tf.float32)])
+def extract_features(img_path):
     img = image.load_img(img_path, target_size=(224, 224))
+    img = tf.cast(img, tf.float32)
     img_data = image.img_to_array(img)
     img_data = np.expand_dims(img_data, axis=0)
     img_data = preprocess_input(img_data)
-    features = image_model.predict(img_data)
+    features = model(img_data, training=False)
     # Get image number from path
     # Images may not be finished in order, so add a key
     image_key = re.search(r"\d+\.\D{3,4}$", img_path)
     image_key = image_key.group(0)
     image_key = image_key.partition('.')[0]
     image_key = int(image_key)
-    return {image_key: features}  # Return a key as well
+    return {image_key: features.numpy()}  # Return a key as well
 
 
 # Function for getting image vectors using multiprocessing
 def extract_features_multiprocessing(image_name) -> list:
     image_vectors = []
     with ProcessPoolExecutor() as executor:
-        futures = {executor.submit(extract_features, name, model) for name in image_name}
+        futures = {executor.submit(extract_features, name) for name in image_name}
 
     for future in futures:
         image_vectors.append(future.result())
@@ -193,7 +196,7 @@ def batch_segment_clothing_multiprocessing(img_dir, out_dir, clothes=None) -> No
     os.makedirs(out_dir, exist_ok=True)
 
     with ProcessPoolExecutor() as executor:
-        [executor.submit(batch_segment_clothing, filename, img_dir, out_dir, clothes) for filename in os.listdir(img_dir)]
+        [executor.submit(batch_segment_clothing, file, img_dir, out_dir, clothes) for file in os.listdir(img_dir)]
 
 
 # Helper function for downloading images
