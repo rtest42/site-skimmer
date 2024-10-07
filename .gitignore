@@ -19,6 +19,7 @@ input/
 
 # Image model
 *.h5
+*.pth
 
 # MacOS
 .DS_Store
