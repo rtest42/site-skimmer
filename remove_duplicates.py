@@ -2,6 +2,7 @@ import os
 import sys
 import torch
 from concurrent.futures import ThreadPoolExecutor
+from glob import glob
 from torchvision import models, transforms
 from PIL import Image, ImageFile
 
@@ -24,40 +25,43 @@ def extract_features_helper(path: str, model: models.vgg.VGG) -> torch.Tensor:
         # Extract feature vector
         feature = model(tensor)
         print(f"Extracting image vector from {path}")
-        return feature.flatten()
+    
+    return feature.flatten()
 
 
 # Extract feature vectors for all images in a directory
 def extract_features(directory: str, model: models.vgg.VGG) -> list[torch.Tensor]:
     features = []
-    files = os.listdir(directory)
+    files = glob(f"{directory}/*")
     for file in files:
-        # Extract feature vectors
-        features.extend(extract_features_helper(file, model))
+        features.append(extract_features_helper(file, model))
 
     return features
 
 
 # Lists duplicate images
-def list_duplicates(directory: str, features: list[torch.Tensor], threshold=0.8) -> set[str]:
+def list_duplicates(directory: str, features: list[torch.Tensor], threshold=0.95) -> list[str]:
     duplicates = set()
-    files = os.listdir(directory)
+    removed = []
+    files = glob(f"{directory}/*")
 
     for i in range(len(files)):
-        if files[i] in duplicates:
+        if i in duplicates:
             continue
 
         for j in range(i + 1, len(files)):
-            if files[j] in duplicates:
+            if j in duplicates:
                 continue
 
             # Compare similarity
-            if torch.nn.functional.cosine_similarity(features[i], features[j], dim=0) > threshold:
-                print(f"Duplicate detected: {files[i]} and {files[j]}")
-                duplicates.add(files[j])
+            score = torch.nn.functional.cosine_similarity(features[i], features[j], dim=0)
+            if score.item() > threshold:
+                print(f"Duplicate detected: {files[i]} and {files[j]} with score {score}")
+                duplicates.add(j)
+                removed.append(files[j])
 
     print(f"Duplicate images: {len(duplicates)}")
-    return duplicates
+    return removed
 
 
 # Removes duplicate images
@@ -74,11 +78,13 @@ def main(args=sys.argv) -> None:
      
     device = 'cuda' if torch.cuda.is_available() else 'cpu'
     if os.path.isfile("vgg16-397923af.pth"):
-        model = models.vgg16().to(device) 
-        model.load_state_dict(torch.load("vgg16-397923af.pth"))
+        state_dict = torch.load("vgg16-397923af.pth")
+        model = models.vgg16().to(device)
+        model.load_state_dict(state_dict)
     else:
         model = models.vgg16(weights=models.VGG16_Weights.DEFAULT).to(device)
         torch.save(model, "vgg16-397923af.pth")
+    # model.classifier = model.classifier[0]  # fc1 layer
     model.eval()
 
     directory = args[1]

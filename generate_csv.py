@@ -16,11 +16,8 @@ def main(args=sys.argv) -> None:
     if len(args) < 3:
         print("Usage: python3 generate_csv.py <directory> <label>")
         return
-    
-    directory = args[1]
-    label = args[2]
 
-    generate_csv(directory, label)
+    generate_csv(args[1], args[2])
 
 
 if __name__ == '__main__':

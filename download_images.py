@@ -6,7 +6,7 @@ from bs4 import BeautifulSoup
 from concurrent.futures import ThreadPoolExecutor
 from glob import glob
 from io import BytesIO
-from PIL import Image, ImageFile, UnidentifiedImageError
+from PIL import Image, UnidentifiedImageError
 from requests.exceptions import InvalidURL, ReadTimeout
 
 
@@ -33,7 +33,7 @@ def extract_tags(files: list[str]) -> list[str]:
 
 
 # Helper function to download and save an image
-def download_images_helper(session, url: str, label: str, counter: list[int], lock, header: dict, threshold=2, timeout=10) -> None:
+def download_images_helper(session, url: str, label: str, counter: list[int], lock, headers: dict, threshold=2, timeout=10) -> None:
     # Check validity of image sources
     if url.get('src') is None:
         return
@@ -52,7 +52,7 @@ def download_images_helper(session, url: str, label: str, counter: list[int], lo
 
     # Download the image
     try:
-        data = session.get(url, header=header, timeout=timeout)
+        data = session.get(url, headers=headers, timeout=timeout)
     except (InvalidURL, ReadTimeout) as e:
         print(e)
         return
@@ -93,13 +93,13 @@ def download_images_helper(session, url: str, label: str, counter: list[int], lo
 
 # Download multiple images at once
 def download_images(links: list[str], label: str) -> None:
+    os.makedirs(label, exist_ok=True)
     session = requests.Session()
     counter = [0]
     lock = threading.Lock()
     header = {
         'user-agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/129.0.0.0 Safari/537.36 Edg/129.0.0.0'
     }
-    os.makedirs(label, exist_ok=True)
 
     with ThreadPoolExecutor() as executor:
         for link in links:
@@ -127,5 +127,4 @@ def main(args=sys.argv) -> None:
 
 
 if __name__ == '__main__':
-    ImageFile.LOAD_TRUNCATED_IMAGES = True
     main()

@@ -6,8 +6,9 @@ from download_images import download_images, extract_tags
 from generate_csv import generate_csv
 from glob import glob
 from image_segmentation import parse_segmentation_mode, segment_images
+from PIL import ImageFile
 from remove_duplicates import extract_features, list_duplicates, remove_duplicates
-from torchvision import models, transforms
+from torchvision import models
 from transformers import pipeline
 
 
@@ -72,4 +73,5 @@ def main(args=sys.argv) -> None:
 
 
 if __name__ == '__main__':
+    ImageFile.LOAD_TRUNCATED_IMAGES = True
     main()

@@ -2,8 +2,8 @@ import numpy as np
 import os
 import sys
 import torch
-from concurrent.futures import ThreadPoolExecutor
-from PIL import Image, ImageFile, UnidentifiedImageError
+from glob import glob
+from PIL import Image, ImageFile
 from transformers import pipeline
 
 
@@ -21,43 +21,42 @@ def parse_segmentation_mode(value: int, options: list[str]) -> list[str]:
 
 
 # Load images
-def load_images(directory: str):
-    files = os.listdir(directory)
+def load_images(directory: str) -> tuple[list[Image.Image], list[str]]:
+    files = glob(f"{directory}/*")
+    images = []
     for file in files:
-        try:
-            with Image.open(file) as image:
-                image = image.convert("RGBA")
-                yield image
-        except UnidentifiedImageError as e:
-            print(e)
+        with Image.open(file) as image:
+            image = image.convert("RGBA")
+            images.append(image.copy())
+
+    return images, files
 
 
 # Take important part of image and save it
 # NOTE: Batching is not used in the pipeline
 def segment_images(input_directory: str, output_directory: str, categories: list[str], pipe) -> None:
-    files = os.listdir(input_directory)
-    images = load_images(input_directory)
+    os.makedirs(output_directory, exist_ok=True)
+    images, files = load_images(input_directory)
     segments = pipe(images)
 
-    for filename, input, output in zip(files, images, segments):
+    for image, file, output in zip(images, files, segments):
         masks = []
         for segment in output:
             if segment['label'] in categories:
                 masks.append(segment['mask'])
 
         if len(masks) == 0:
-            print(f"Unable to segment {filename}")
+            print(f"Unable to segment {file}")
             continue
         
         stack = np.array(masks[0])
         for mask in masks:
-            stack = stack + np.array(mask)
+            stack += np.array(mask)
 
-        image = Image.fromarray(stack)
-        input.putalpha(image)
-        path = os.path.join(output_directory, os.path.basename(filename).partition('.')[0] + ".png")
-        input.save(path, "PNG")
-        print(f"Segmented {filename} successfully")
+        image.putalpha(Image.fromarray(stack))
+        path = os.path.join(output_directory, os.path.basename(file).partition('.')[0] + ".png")
+        image.save(path, "PNG")
+        print(f"Segmented {file} successfully")
 
 
 # For debugging
