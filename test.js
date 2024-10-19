@@ -31,10 +31,6 @@ import puppeteer from 'puppeteer-core';
     await browser.close();
 })();*/
 // Launch the browser and open a new blank page
-const browser = await puppeteer.launch({
-    //channel: 'edge',  // You can also use 'chrome', 'chrome-beta', 'chromium', 'edge', etc.
-    executablePath: 'C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe'
-  });
 //const page = await browser.newPage();
 /*
 // Navigate the page to a URL.
@@ -63,15 +59,16 @@ await browser.close();
 // const puppeteer = require('puppeteer');
 
 const main = async () => {
-    const browser = await puppeteer.launch();
+    const browser = await puppeteer.launch({
+        //channel: 'edge',  // You can also use 'chrome', 'chrome-beta', 'chromium', 'edge', etc.
+        executablePath: 'C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe'
+      });
     const page = await browser.newPage();
-    await page.goto('https://example.com'); // replace with your URL
+    await page.goto('https://www.outerknown.com/collections/mens-pants'); // replace with your URL
 
     const allImages = await page.evaluate(() => {
-        const images = document.getElementsByTagName('img');
-        const sources = images.querySelector('src').innerText;
-        return sources;
-    })
+        return Array.from(document.images, img => img.src);
+    });
 
     console.log(allImages);
     // Scroll to the bottom of the page
@@ -81,7 +78,7 @@ const main = async () => {
     //const htmlContent = await page.content();
     //console.log(htmlContent);
 
-    //await browser.close();
+    await browser.close();
 }
 
 main();
