@@ -35,8 +35,8 @@ const browser = await puppeteer.launch({
     //channel: 'edge',  // You can also use 'chrome', 'chrome-beta', 'chromium', 'edge', etc.
     executablePath: 'C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe'
   });
-const page = await browser.newPage();
-
+//const page = await browser.newPage();
+/*
 // Navigate the page to a URL.
 await page.goto('https://developer.chrome.com/');
 
@@ -59,3 +59,48 @@ const fullTitle = await textSelector?.evaluate(el => el.textContent);
 console.log('The title of this blog post is "%s".', fullTitle);
 
 await browser.close();
+*/
+// const puppeteer = require('puppeteer');
+
+const main = async () => {
+    const browser = await puppeteer.launch();
+    const page = await browser.newPage();
+    await page.goto('https://example.com'); // replace with your URL
+
+    const allImages = await page.evaluate(() => {
+        const images = document.getElementsByTagName('img');
+        const sources = images.querySelector('src').innerText;
+        return sources;
+    })
+
+    console.log(allImages);
+    // Scroll to the bottom of the page
+    //await autoScroll(page);
+
+    // Get the HTML content
+    //const htmlContent = await page.content();
+    //console.log(htmlContent);
+
+    //await browser.close();
+}
+
+main();
+
+// Function to scroll to the bottom of the page
+async function autoScroll(page) {
+    await page.evaluate(async () => {
+        await new Promise((resolve, reject) => {
+            let totalHeight = 0;
+            const distance = 100; // Scroll step
+            const timer = setInterval(() => {
+                window.scrollBy(0, distance);
+                totalHeight += distance;
+
+                if (totalHeight >= document.body.scrollHeight) {
+                    clearInterval(timer);
+                    resolve();
+                }
+            }, 100); // Time between each scroll (ms)
+        });
+    });
+}
