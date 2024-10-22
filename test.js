@@ -58,13 +58,17 @@ await browser.close();
 */
 // const puppeteer = require('puppeteer');
 
-const main = async () => {
+const browser = await puppeteer.launch({
+  //channel: 'edge',  // You can also use 'chrome', 'chrome-beta', 'chromium', 'edge', etc.
+  executablePath: 'C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe'
+});
+const main = async (website) => {/*
     const browser = await puppeteer.launch({
         //channel: 'edge',  // You can also use 'chrome', 'chrome-beta', 'chromium', 'edge', etc.
         executablePath: 'C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe'
-      });
+      });*/
     const page = await browser.newPage();
-    await page.goto('https://www.outerknown.com/collections/mens-pants'); // replace with your URL
+    await page.goto(website); // replace with your URL
 
     const allImages = await page.evaluate(() => {
         return Array.from(document.images, img => img.src);
@@ -81,8 +85,8 @@ const main = async () => {
     await browser.close();
 }
 
-main();
-
+main('https://www.outerknown.com/collections/mens-pants');
+/*
 // Function to scroll to the bottom of the page
 async function autoScroll(page) {
     await page.evaluate(async () => {
@@ -101,3 +105,4 @@ async function autoScroll(page) {
         });
     });
 }
+*/
