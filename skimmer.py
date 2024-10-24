@@ -1,4 +1,6 @@
 import os
+import re
+import subprocess
 import sys
 import time
 import torch
@@ -14,28 +16,25 @@ from transformers import pipeline
 
 def main(args=sys.argv) -> None:
     if len(args) < 2:
-        print("Usage: python3 skimmer.py <pattern1> [pattern2] ...")
+        print("Usage: python3 skimmer.py <file>")
         return
     
     # Variables for downloading images
-    files = []
-    patterns = args[1:]
-    for pattern in patterns:
-        files.extend(glob(pattern))
-
-    if len(files) == 0:
-        print("No files found!")
-        return
+    file = args[1]
     
     segmentation = int(input("Enter a segmentation mode (integer): "))
     label = input("Enter a label: ")
     start = time.perf_counter()
 
-    # Download images from HTML files
-    tags = extract_tags(files)
-    if len(tags) == 0:
+    # Download images from websites
+    result = subprocess.run(["node", "puppeteer.js", file], capture_output=True, text=True)
+
+    if not result.stdout:
         print("No images found!")
-        return
+        return 
+
+    tags = re.sub(r"[\n\[\] ']", "", result.stdout)
+    tags = tags.split(',')
     
     download_images(tags, label)
 
