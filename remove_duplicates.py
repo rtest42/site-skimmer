@@ -71,7 +71,7 @@ def remove_duplicates(files: list[str]) -> None:
 
 
 # For debugging
-def main(args=sys.argv) -> None:
+def main(args) -> None:
     if len(args) < 2:
         print("Usage: python3 remove_duplicates.py <directory>")
         return
@@ -95,4 +95,4 @@ def main(args=sys.argv) -> None:
 
 if __name__ == '__main__':
     ImageFile.LOAD_TRUNCATED_IMAGES = True
-    main()
+    main(sys.argv)

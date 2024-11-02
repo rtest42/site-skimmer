@@ -6,7 +6,7 @@ import time
 import torch
 from download_images import download_images
 from generate_csv import generate_csv
-from image_segmentation import parse_segmentation_mode, segment_images
+from image_segmentation import extract_masks
 from PIL import ImageFile
 from remove_duplicates import extract_features, list_duplicates, remove_duplicates
 from torchvision import models
@@ -15,13 +15,13 @@ from transformers import pipeline
 
 def main(args) -> None:
     if len(args) < 2:
-        print("Usage: python3 skimmer.py <file>")
+        print("Usage: python3 skimmer2.py <file>")
         return
     
     # Variables for downloading images
     file = args[1]
     
-    segmentation = int(input("Enter a segmentation mode (integer): "))
+    # segmentation = int(input("Enter a segmentation mode (integer): "))
     label = input("Enter a label: ")
     start = time.perf_counter()
 
@@ -55,15 +55,17 @@ def main(args) -> None:
 
     # Variables for segmenting images
     categories = ["Hat", "Upper-clothes", "Skirt", "Pants", "Dress", "Belt", "Left-shoe", "Right-shoe", "Scarf"]
-    segmentations = parse_segmentation_mode(segmentation, categories)
+    # segmentations = parse_segmentation_mode(segmentation, categories)
+    segmentations = [categories[1], categories[3]]
     pipe = pipeline("image-segmentation", model="mattmdjaga/segformer_b2_clothes", device=0 if torch.cuda.is_available() else -1)
-    output_directory = input_directory + "-f"
+    # output_directory = input_directory + "-f"
 
     # Segment images
-    segment_images(input_directory, output_directory, segmentations, pipe)
+    # segment_images(input_directory, output_directory, segmentations, pipe)
+    extract_masks(input_directory, segmentations, pipe)
 
     # Generate CSV
-    generate_csv(output_directory, label)
+    # generate_csv(output_directory, label)
     
     # Finish program
     end = time.perf_counter()

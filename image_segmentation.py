@@ -59,8 +59,19 @@ def segment_images(input_directory: str, output_directory: str, categories: list
         print(f"Segmented {file} successfully")
 
 
+# Determine if masks exist
+def extract_masks(input_directory: str, categories: list[str], pipe) -> None:
+    images, files = load_images(input_directory)
+    segments = pipe(images)
+
+    for image, file, output in zip(images, files, segments):
+        for segment in output:
+            if segment['label'] not in categories:
+                print(f'WARNING image {file} is bad')
+
+
 # For debugging
-def main(args=sys.argv) -> None:
+def main(args) -> None:
     if len(args) < 3:
         print("Usage: python3 image_segmentation.py <segmentation_mode> <input-directory> [output-directory]")
         print("The recommended segmentation modes are:")
@@ -79,4 +90,4 @@ def main(args=sys.argv) -> None:
 
 if __name__ == '__main__':
     ImageFile.LOAD_TRUNCATED_IMAGES = True
-    main()
+    main(sys.argv)

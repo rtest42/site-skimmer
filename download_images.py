@@ -11,7 +11,7 @@ from requests.exceptions import InvalidURL, ReadTimeout
 
 
 # Helper function to get all image HTML tags
-def extract_tags_helper(file: str, tag='img') -> list[str]:
+def extract_tags_helper(file: str, tag='img') -> list:
     with open(file, 'r', encoding='utf8') as f:
         print(f"Opening {file}")
         data = f.read()
@@ -62,8 +62,8 @@ def download_images_helper(session, url: str, label: str, counter: list[int], lo
     
     # Check image requirements
     data = data.content
-    bytes = len(data)
-    if bytes < 8000:
+    byte = len(data)
+    if byte < 8000:
         return
     
     try:
@@ -107,7 +107,7 @@ def download_images(links: list[str], label: str) -> None:
 
 
 # For debugging
-def main(args=sys.argv) -> None:
+def main(args) -> None:
     if len(args) < 2:
         print("Usage: python3 download_images.py <pattern1> [pattern2] ...")
         return
@@ -127,4 +127,4 @@ def main(args=sys.argv) -> None:
 
 
 if __name__ == '__main__':
-    main()
+    main(sys.argv)

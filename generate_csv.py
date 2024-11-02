@@ -12,7 +12,7 @@ def generate_csv(directory: str, label: str) -> None:
 
 
 # For debugging
-def main(args=sys.argv) -> None:
+def main(args) -> None:
     if len(args) < 3:
         print("Usage: python3 generate_csv.py <directory> <label>")
         return
@@ -21,4 +21,4 @@ def main(args=sys.argv) -> None:
 
 
 if __name__ == '__main__':
-    main()
+    main(sys.argv)
