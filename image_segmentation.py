@@ -2,6 +2,7 @@ import numpy as np
 import os
 import sys
 import torch
+from datasets import load_dataset
 from glob import glob
 from PIL import Image, ImageFile
 from transformers import pipeline
@@ -37,7 +38,8 @@ def load_images(directory: str) -> tuple[list[Image.Image], list[str]]:
 def segment_images(input_directory: str, output_directory: str, categories: list[str], pipe) -> None:
     os.makedirs(output_directory, exist_ok=True)
     images, files = load_images(input_directory)
-    segments = pipe(images)
+    dataset = load_dataset("imagefolder", data_dir=input_directory, split='test')
+    segments = pipe(dataset)
 
     for image, file, output in zip(images, files, segments):
         masks = []
@@ -61,13 +63,20 @@ def segment_images(input_directory: str, output_directory: str, categories: list
 
 # Determine if masks exist
 def extract_masks(input_directory: str, categories: list[str], pipe) -> None:
-    images, files = load_images(input_directory)
-    segments = pipe(images)
+    dataset = load_dataset("imagefolder", data_dir=input_directory)
 
-    for image, file, output in zip(images, files, segments):
-        for segment in output:
-            if segment['label'] not in categories:
-                print(f'WARNING image {file} is bad')
+    for data in dataset['train']:
+        file = data['image'].filename
+        output = pipe(data['image'])
+        labels = [segment['label'] for segment in output]
+        if 'Dress' in labels:
+            pass
+        elif 'Shirt' and 'Skirt' or 'Pants' in labels:
+            pass
+        elif 'Face' and 'Left-leg' and 'Right-leg' and 'Left-shoe' and 'Right-shoe':
+            pass
+        else:
+            print(f'WARNING: image {file} is bad')
 
 
 # For debugging
