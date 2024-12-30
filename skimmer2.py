@@ -8,6 +8,7 @@ from download_images import download_images
 from generate_csv import generate_csv
 from image_segmentation import extract_masks
 from PIL import ImageFile
+from pinscrape import scraper, Pinterest
 from remove_duplicates import extract_features, list_duplicates, remove_duplicates
 from torchvision import models
 from transformers import pipeline
@@ -39,19 +40,19 @@ def main(args) -> None:
 
     # Remove duplicate images
     input_directory = label
-    device = 'cuda' if torch.cuda.is_available() else 'cpu'
-    if os.path.isfile("vgg16-397923af.pth"):
-        model = models.vgg16().to(device) 
-        model.load_state_dict(torch.load("vgg16-397923af.pth"))
-    else:
-        model = models.vgg16(weights=models.VGG16_Weights.DEFAULT).to(device)
-        torch.save(model, "vgg16-397923af.pth")
-    model.eval()
+    # device = 'cuda' if torch.cuda.is_available() else 'cpu'
+    # if os.path.isfile("vgg16-397923af.pth"):
+    #    model = models.vgg16().to(device)
+    #    model.load_state_dict(torch.load("vgg16-397923af.pth"))
+    # else:
+    #    model = models.vgg16(weights=models.VGG16_Weights.DEFAULT).to(device)
+    #    torch.save(model, "vgg16-397923af.pth")
+    # model.eval()
 
     # Remove duplicate images
-    features = extract_features(input_directory, model)
-    files = list_duplicates(input_directory, features)
-    remove_duplicates(list(files))
+    # features = extract_features(input_directory, model)
+    # files = list_duplicates(input_directory, features)
+    # remove_duplicates(list(files))
 
     # Variables for segmenting images
     categories = ["Hat", "Upper-clothes", "Skirt", "Pants", "Dress", "Belt", "Left-shoe", "Right-shoe", "Scarf"]
