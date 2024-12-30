@@ -35,6 +35,7 @@ def extract_tags(files: list[str]) -> list[str]:
 # Helper function to download and save an image
 def download_images_helper(session, url: str, label: str, counter: list[int], lock, headers: dict, threshold=2, timeout=10) -> None:
     # Check validity of image sources
+    url = url.get('src')
     if not url:
         return
     
@@ -98,7 +99,7 @@ def download_images(links: list[str], label: str) -> None:
     counter = [0]
     lock = threading.Lock()
     header = {
-        'user-agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36 Edg/130.0.0.0'
+        'user-agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36 Edg/131.0.0.0'
     }
 
     with ThreadPoolExecutor() as executor:

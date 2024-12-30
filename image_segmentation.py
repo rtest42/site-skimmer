@@ -62,21 +62,79 @@ def segment_images(input_directory: str, output_directory: str, categories: list
 
 
 # Determine if masks exist
-def extract_masks(input_directory: str, categories: list[str], pipe) -> None:
-    dataset = load_dataset("imagefolder", data_dir=input_directory)
+def extract_masks(input_directory: str, categories: list[str], pipe, threshold=0.05) -> None:
+    categories = ['good', 'okay', 'bad']
+    for category in categories:
+        os.makedirs(category, exist_ok=True)
 
+    images, files = load_images(input_directory)
+    dataset = load_dataset("imagefolder", data_dir=input_directory)
+    count=0
     for data in dataset['train']:
-        file = data['image'].filename
-        output = pipe(data['image'])
-        labels = [segment['label'] for segment in output]
-        if 'Dress' in labels:
-            pass
-        elif 'Shirt' and 'Skirt' or 'Pants' in labels:
-            pass
-        elif 'Face' and 'Left-leg' and 'Right-leg' and 'Left-shoe' and 'Right-shoe':
-            pass
+        image = data['image']
+        file = files[count]
+        count+=1
+        output = pipe(image)
+        #labels = [segment['label'] for segment in output]
+
+        width, height = image.size
+        total_pixels = width * height
+
+        pixels = {
+            "Background":0,
+            "Hat":0,
+            "Hair":0,
+            "Sunglasses":0, 
+            "Upper-clothes":0, 
+            "Skirt":0, 
+            "Pants":0, 
+            "Dress":0, 
+            "Belt":0,
+            "Left-shoe":0, 
+            "Right-shoe":0, 
+            "Face":0, 
+            "Left-leg":0, 
+            "Right-leg":0, 
+            "Left-arm":0, 
+            "Right-arm":0, 
+            "Bag":0, 
+            "Scarf":0
+        }
+
+        for segment in output:
+            mask = np.array(segment['mask'])
+            mask = (mask > 127).astype(np.uint8)
+
+            label = segment['label']
+            #print(label, mask.sum(), total_pixels, mask)
+            pixels[label] = mask.sum()
+            pixels[label] = pixels[label] / total_pixels
+            #pixels[label] = pixels[label] >= threshold
+
+        if pixels['Face'] and (pixels['Left-shoe'] or pixels['Right-shoe']):
+            category = "good"
+            # Some more conditions here
         else:
-            print(f'WARNING: image {file} is bad')
+            category = "bad"
+
+        #if pixels['Face'] and pixels['Left-shoe'] and pixels['Right-shoe'] and pixels['Upper-clothes'] and pixels['Pants'] and pixels['Left-arm'] and pixels['Right-arm'] and pixels['Left-leg'] and pixels['Right-leg']:
+        #    category = "good"
+        #elif (pixels['Face'] or pixels['Upper-clothes'] or pixels['Pants'] or pixels['Left-arm'] or pixels['Right-arm'] or pixels['Left-leg'] or pixels['Right-leg']) and pixels['Right-shoe'] and pixels['Left-shoe']:
+        #    category = "okay"
+        #else:
+        #    category = "bad"
+
+        #if 'Dress' in labels:
+        #    pass
+        #elif 'Shirt' and 'Skirt' or 'Pants' in labels:
+        #    pass
+        #elif 'Face' and 'Left-leg' and 'Right-leg' and 'Left-shoe' and 'Right-shoe':
+        #    pass
+        #else:
+        #    print(f'WARNING: image {file} is bad')
+
+        image.save(os.path.join(category, os.path.basename(file)))
+        print(f'{os.path.basename(file)} categorized as {category}')
 
 
 # For debugging
