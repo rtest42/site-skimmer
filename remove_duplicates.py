@@ -75,15 +75,16 @@ def main(args) -> None:
     if len(args) < 2:
         print("Usage: python3 remove_duplicates.py <directory>")
         return
-     
+
+    file = "vgg16-397923af.pth"
     device = 'cuda' if torch.cuda.is_available() else 'cpu'
-    if os.path.isfile("vgg16-397923af.pth"):
-        state_dict = torch.load("vgg16-397923af.pth")
+    if os.path.isfile(file):
+        state_dict = torch.load(file)
         model = models.vgg16().to(device)
         model.load_state_dict(state_dict)
     else:
         model = models.vgg16(weights=models.VGG16_Weights.DEFAULT).to(device)
-        torch.save(model, "vgg16-397923af.pth")
+        torch.save(model, file)
     # model.classifier = model.classifier[0]  # fc1 layer
     model.eval()
 

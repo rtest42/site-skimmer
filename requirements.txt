@@ -11,3 +11,5 @@ opencv-python
 tensorflow
 transformers
 torch
+
+brotli

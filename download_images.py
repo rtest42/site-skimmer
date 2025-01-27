@@ -33,9 +33,11 @@ def extract_tags(files: list[str]) -> list[str]:
 
 
 # Helper function to download and save an image
-def download_images_helper(session, url: str, label: str, counter: list[int], lock, headers: dict, threshold=2, timeout=10) -> None:
+def download_images_helper(session, url: str, label: str, counter: list[int], lock, headers: dict, threshold: int = 2, timeout: int = 10) -> None:
     # Check validity of image sources
-    url = url.get('src')
+    if isinstance(url, dict):
+        url = url.get('src')
+
     if not url:
         return
     

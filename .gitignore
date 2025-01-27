@@ -7,9 +7,13 @@ pyvenv.cfg
 
 # Input and output files and directories
 example*.txt
-khaki/
 output/
 input/
+label1/
+label2/
+bad/
+good/
+okay/
 
 # Output CSV files
 *.csv

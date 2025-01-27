@@ -67,13 +67,13 @@ def extract_masks(input_directory: str, categories: list[str], pipe, threshold=0
     for category in categories:
         os.makedirs(category, exist_ok=True)
 
-    images, files = load_images(input_directory)
-    dataset = load_dataset("imagefolder", data_dir=input_directory)
-    count=0
-    for data in dataset['train']:
+    images, files = load_images(input_directory+"/test")
+    dataset = load_dataset("imagefolder", data_dir=input_directory, split='test')
+    count = 0
+    for data in dataset:
         image = data['image']
         file = files[count]
-        count+=1
+        count += 1
         output = pipe(image)
         #labels = [segment['label'] for segment in output]
 
