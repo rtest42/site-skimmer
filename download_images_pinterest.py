@@ -235,7 +235,7 @@ if __name__ == "__main__":
     output_folder = input("Enter the output folder (leave blank for keyword): ")
     if len(output_folder) == 0:
         output_folder = keyword
-    output_folder = f"input/test/{output_folder}"
+    output_folder = f"label2/test/{output_folder}"
     p = Pinterest()
     images_url = p.search(keyword, download_limit)
     p.download(url_list=images_url, number_of_workers=os.cpu_count(), output_folder=output_folder)
