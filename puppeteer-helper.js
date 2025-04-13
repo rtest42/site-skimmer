@@ -55,7 +55,7 @@ async function ScrapeImage(url, category){
     //console.log(data.length);
     //console.log(urls);
     //console.log(urls.length);
-    for (let i = 0; i < data.length; i++) {
+    /*for (let i = 0; i < data.length; i++) {
         const page = await browser.newPage();
         await page.goto(data[i]);
         if(!fs.existsSync("./label2/test/" + category)){
@@ -70,7 +70,7 @@ async function ScrapeImage(url, category){
             break;
         }
         
-    }
+    }*/
 
     if (iterations < 1) {
         iterations++;

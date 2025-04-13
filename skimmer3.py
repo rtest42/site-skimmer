@@ -17,11 +17,17 @@ if __name__ == '__main__':
     pipe = pipeline("image-segmentation", model="mattmdjaga/segformer_b2_clothes", device=0 if torch.cuda.is_available() else -1)
     # output_directory = input_directory + "-f"
 
-    input_directory = 'label2'
-    os.makedirs('output', exist_ok=True)
-    result = subprocess.run(["node", "puppeteer-2.js"], capture_output=True, text=True)
-    #result = json.loads(result.stdout.strip())
-    #download_images(result, 'label2/test/khakis')
+    searches = ['khakis', 'shirts']
+    for search in searches:
+        print("Searching " + search + " via Pinterest")
+        result = subprocess.run(["node", "puppeteer-2.js", search], capture_output=True, text=True)
+        result = json.loads(result.stdout.strip())
+        #print(type(result))
+        #print(len(result))
+        #print(result)
+        filtered_results = [url for url in result if '236x' in url]
+        download_images(filtered_results, os.path.join('label2', 'test', search), checks=False)
+
     dataset = load_dataset("imagefolder", data_dir='label2', split='test')
 
     # Get the label names (mapping from label IDs to class names)

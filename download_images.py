@@ -94,8 +94,29 @@ def download_images_helper(session, url: str, label: str, counter: list[int], lo
         f.write(data)
 
 
+# Helper function to download an image from Pinterest. Checks removed
+def download_images_pinterest_helper(session, url: str, label: str, counter: list[int], lock, headers: dict, threshold: int = 2, timeout: int = 10):
+    # Send a GET request to the image URL
+    response = session.get(url, headers=headers, timeout=timeout)
+    
+    # Check if the request was successful
+    if response.status_code == 200:
+        # Open the file in write-binary mode and save the image
+        with lock:
+            name = os.path.join(label, f"{os.path.basename(label)}{counter[0]}.jpg")
+            print(name)
+            print(f"Fetched image #{counter[0]}")
+            counter[0] += 1
+
+        with open(name, 'wb') as file:
+            file.write(response.content)
+            print(f"Image successfully downloaded and saved to {name}")
+    else:
+        print(f"Failed to retrieve image. HTTP Status code: {response.status_code}")
+
+
 # Download multiple images at once
-def download_images(links: list[str], label: str) -> None:
+def download_images(links: list[str], label: str, checks: bool = True) -> None:
     os.makedirs(label, exist_ok=True)
     session = requests.Session()
     counter = [0]
@@ -104,9 +125,14 @@ def download_images(links: list[str], label: str) -> None:
         'user-agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36 Edg/131.0.0.0'
     }
 
-    with ThreadPoolExecutor() as executor:
-        for link in links:
-            executor.submit(download_images_helper, session, link, label, counter, lock, header)
+    if checks:
+        with ThreadPoolExecutor() as executor:
+            for link in links:
+                executor.submit(download_images_helper, session, link, label, counter, lock, header)
+    else:
+        with ThreadPoolExecutor() as executor:
+            for link in links:
+                executor.submit(download_images_pinterest_helper, session, link, label, counter, lock, header)
 
 
 # For debugging
