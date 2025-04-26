@@ -11,6 +11,7 @@ output/
 input/
 label1/
 label2/
+test*/
 bad/
 good/
 okay/
@@ -29,7 +30,7 @@ okay/
 .DS_Store
 
 # Python cache
-__pycache__
+__pycache__/
 
 # Pinterest APIs
 data/

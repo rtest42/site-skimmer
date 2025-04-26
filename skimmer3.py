@@ -8,19 +8,16 @@ from datasets import load_dataset
 from download_images import download_images
 from transformers import pipeline
 
-if __name__ == '__main__':
+def skimming():
     # ImageFile.LOAD_TRUNCATED_IMAGES = True
     # Variables for segmenting images
-    categories = ["Hat", "Upper-clothes", "Skirt", "Pants", "Dress", "Belt", "Left-shoe", "Right-shoe", "Scarf"]
     # segmentations = parse_segmentation_mode(segmentation, categories)
-    segmentations = [categories[1], categories[3]]
-    pipe = pipeline("image-segmentation", model="mattmdjaga/segformer_b2_clothes", device=0 if torch.cuda.is_available() else -1)
     # output_directory = input_directory + "-f"
 
     searches = ['khakis', 'shirts']
     for search in searches:
         print("Searching " + search + " via Pinterest")
-        result = subprocess.run(["node", "puppeteer-2.js", search], capture_output=True, text=True)
+        result = subprocess.run(["node", "puppeteer-main.js", search], capture_output=True, text=True)
         result = json.loads(result.stdout.strip())
         #print(type(result))
         #print(len(result))
@@ -28,6 +25,11 @@ if __name__ == '__main__':
         filtered_results = [url for url in result if '236x' in url]
         download_images(filtered_results, os.path.join('label2', 'test', search), checks=False)
 
+
+def detection():
+    categories = ["Hat", "Upper-clothes", "Skirt", "Pants", "Dress", "Belt", "Left-shoe", "Right-shoe", "Scarf"]
+    segmentations = [categories[1], categories[3]]
+    pipe = pipeline("image-segmentation", model="mattmdjaga/segformer_b2_clothes", device=0 if torch.cuda.is_available() else -1)
     dataset = load_dataset("imagefolder", data_dir='label2', split='test')
 
     # Get the label names (mapping from label IDs to class names)
@@ -84,3 +86,13 @@ if __name__ == '__main__':
         os.makedirs(os.path.join(category, label_name), exist_ok=True)
         image.save(os.path.join(category, label_name, os.path.basename(file)))
         print(f'{os.path.basename(file)} categorized as {category}')
+
+
+def main():
+    skimming()
+    detection()
+
+
+if __name__ == '__main__':
+    main()
+    
