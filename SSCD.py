@@ -21,11 +21,10 @@ class SSCD(object):
 
         
     def load_dataset(self) -> None:
-        self.dataset = load_dataset("imagefolder", data_dir="label2", split='test')
+        self.dataset = load_dataset("imagefolder", data_dir=self.label, split='test', keep_in_memory=True)
 
 
     def skimmer(self, searches: list[str], folders: list[str], rounds: int) -> None:
-        results = []
         for search, folder in zip(searches, folders):
             print(f"Searching {search} via Pinterest")
             os.makedirs(os.path.join(self.label, 'test', folder), exist_ok=True)
@@ -44,13 +43,10 @@ class SSCD(object):
         # segments = self.pipe(self.dataset)
 
         label_names = self.dataset.features['label'].names
-
+        
         for i, data in enumerate(tqdm(self.dataset, desc="piping")):
             image = data['image']
-            try:
-                file = image.filename
-            except AttributeError:
-                file = "temp.png"
+            file = image.filename
 
             output = self.pipe(image)
 
@@ -73,6 +69,7 @@ class SSCD(object):
             if 'Face' in labels and ('Left-shoe' in labels or 'Right-shoe' in labels):
                 category = 'good'
 
+            os.makedirs(os.path.join(category, label_name), exist_ok=True)
             image.save(os.path.join(category, label_name, os.path.basename(file)))
 
             # Clipping (only for Label 1)
@@ -86,6 +83,7 @@ class SSCD(object):
                     stack += np.array(mask)
 
                 image.putalpha(Image.fromarray(stack))
+                os.makedirs(os.path.join(output_directory, label_name), exist_ok=True)
                 image.save(os.path.join(output_directory, label_name, os.path.basename(file)))
 
 
@@ -106,17 +104,17 @@ def main() -> None:
         folder = input("Enter the folder names (separate by comma; leave blank for the same as the search terms): ").split(',')
         # Format folder output
         if len(folder) > len(search):
-            folder = folder[:len(search)]
+            folder = search
         elif len(folder) < len(search):
             for i in range(len(search)):
                 if i >= len(folder):
                     folder.append(search[i])
 
-        sscd.skimmer(search, folder, rounds)
+        sscd.skimmer(search, search, rounds)
 
     sscd.load_dataset()
     # PERFORM DETECTION AND/OR CLIPPING
-    sscd.clipping()
+    sscd.clipping("label1background")
 
 
 if __name__ == '__main__':

@@ -26,7 +26,6 @@ async function ScrapeImage(startUrl, maxIterations){
             // Scroll to load images
             let height = 0;
             while (height < heightFlag) {
-                previousHeight = await page.evaluate(() => document.body.scrollHeight);
                 await page.evaluate(() => window.scrollBy(0, window.innerHeight));
                 await new Promise(resolve => setTimeout(resolve, 1500));
                 height = await page.evaluate(() => document.body.scrollHeight);
@@ -50,10 +49,10 @@ async function ScrapeImage(startUrl, maxIterations){
         } catch (err) {
             console.warn(`Failed on ${url}: ${err.message}`);
         }
-
-        console.log(JSON.stringify([...download_urls])); // Return value
-        await browser.close();
     }
+
+    console.log(JSON.stringify([...download_urls])); // Return value
+    await browser.close();
 }
 
 export { ScrapeImage };
