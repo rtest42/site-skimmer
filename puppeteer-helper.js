@@ -37,7 +37,8 @@ async function ScrapeImage(startUrl, maxIterations){
             );
 
             images.forEach(src => download_urls.add(src)); // Add image URLs to output
-
+            
+            // Collect more Pinterest links
             const links = await page.evaluate(() =>
                 Array.from(document.querySelectorAll('a')).map(a => a.href)
             );

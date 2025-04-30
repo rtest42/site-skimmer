@@ -3,7 +3,7 @@ import requests
 import os
 import sys
 from bs4 import BeautifulSoup
-from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import as_completed, ThreadPoolExecutor
 from glob import glob
 from io import BytesIO
 from PIL import Image, UnidentifiedImageError
@@ -125,14 +125,14 @@ def download_images(links: list[str], label: str, checks: bool = True) -> None:
         'user-agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36 Edg/131.0.0.0'
     }
 
-    if checks:
-        with ThreadPoolExecutor() as executor:
-            for link in links:
-                executor.submit(download_images_helper, session, link, label, counter, lock, header)
-    else:
-        with ThreadPoolExecutor() as executor:
-            for link in links:
-                executor.submit(download_images_pinterest_helper, session, link, label, counter, lock, header)
+    #if checks:
+    #    with ThreadPoolExecutor() as executor:
+    #        for link in links:
+    #            executor.submit(download_images_helper, session, link, label, counter, lock, header)
+    #else:
+    with ThreadPoolExecutor() as executor:
+        for link in links:
+            executor.submit(download_images_pinterest_helper, session, link, label, counter, lock, header)
 
 
 # For debugging
