@@ -9,14 +9,9 @@ import requests
 import subprocess
 from concurrent.futures import as_completed, ThreadPoolExecutor
 from PIL import Image
-from image_segmentation import load_images
 from datasets import load_dataset, Image as dataset_image # Avoid confusion between PIL.Image
 from transformers.pipelines.pt_utils import KeyDataset
-from download_images import download_images
 from transformers import pipeline
-
-from pathlib import Path
-from skimmer3 import skimming, detection, main
 from tqdm import tqdm
 
 logger = logging.getLogger(__name__)
@@ -29,7 +24,7 @@ class SSCD(object):
         self.dataset = None
 
         
-    def load_dataset(self) -> None:
+    def load_dataset(self):
         self.dataset = load_dataset("imagefolder", data_dir=self.label, split='test')
         # Workaround to keep file paths
         self.dataset = self.dataset.cast_column("image", dataset_image(decode=False)) # Prevent decoding, keep file paths
@@ -38,9 +33,9 @@ class SSCD(object):
         self.dataset = self.dataset.cast_column("image", dataset_image(decode=True)) # Re-encode to PIL.Image; file path is kept in filename
 
     
-    def download_image(self, session: requests.Session, url: str, label: str, counter: list[int], lock: threading.Lock) -> None:
+    def download_image(self, session: requests.Session, url: str, label: str, counter: list[int], lock: threading.Lock):
         headers = {
-            'user-agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36 Edg/131.0.0.0'
+            'user-agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/135.0.0.0 Safari/537.36 Edg/135.0.0.0'
         }
         timeout = 10 # seconds
         _, ext = os.path.splitext(url)
@@ -55,13 +50,15 @@ class SSCD(object):
 
                 with open(name, 'wb') as file:
                     file.write(response.content)
+
+                print(f"Successfully downloaded and saved {url}") # TODO convert to logging
             else:
                 print(f"Status code for {url}: {response.status_code}") # TODO convert to logging
         except requests.exceptions.RequestException as e:
             print(f"Failed to download {url}: {e}") # TODO convert to logging
 
 
-    def download_images(self, links: list[str], label: str) -> None:
+    def download_images(self, links: list[str], label: str):
         os.makedirs(label, exist_ok=True)
         session = requests.Session()
         counter = [0, len(links)] # [counter, number of links (constant)]
@@ -71,10 +68,11 @@ class SSCD(object):
             with ThreadPoolExecutor(max_workers=10) as executor:
                 futures = [executor.submit(self.download_image, session, link, label, counter, lock) for link in links]
                 for _ in as_completed(futures):
+                    # result = future.result()
                     pbar.update(1)
 
 
-    def skimmer(self, searches: list[str], folders: list[str], rounds: int) -> None:
+    def skimmer(self, searches: list[str], folders: list[str], rounds: int):
         # Skimming is slow on purpose to prevent anti-bot detection
         for search, folder in zip(searches, folders):
             print(f"Searching {search} via Pinterest")
@@ -83,20 +81,32 @@ class SSCD(object):
             filtered_results = [url for url in result if '236x' in url] # Only keep images with a width of 236px
             self.download_images(filtered_results, os.path.join(self.label, 'test', folder))
 
-    
-    def detection(self) -> None: # TODO: test - remove later
-        for _, x, _ in tqdm(zip(self.pipe(KeyDataset(self.dataset, "image")), KeyDataset(self.dataset, "filename"), KeyDataset(self.dataset, "labelname")), total=len(self.dataset), desc="Segmenting images"):
-            x['path']
+
+    def detection(self): # TODO: test - remove later
+        for _, _, _ in tqdm(zip(self.pipe(KeyDataset(self.dataset, "image")), KeyDataset(self.dataset, "filename"), KeyDataset(self.dataset, "labelname")), total=len(self.dataset), desc="1"):
+            pass
+        for _ in tqdm(zip(self.pipe(KeyDataset(self.dataset, "image"), batch_size=2)), total=len(self.dataset), desc="2"):
+            pass
+        for _ in tqdm(zip(self.pipe(KeyDataset(self.dataset, "image"), batch_size=4)), total=len(self.dataset), desc="4"):
+            pass
+        for _ in tqdm(zip(self.pipe(KeyDataset(self.dataset, "image"), batch_size=8)), total=len(self.dataset), desc="8"):
             pass
 
 
-    def image_segmentation(self, output_directory: str = "label1output") -> None:
-        os.makedirs(output_directory, exist_ok=True)
+    def image_segmentation(self):
+        # Make directories
+        for labelname in self.dataset.features['label'].names:
+            for category in ["bad", "good", "output"]:
+                os.makedirs(os.path.join(self.label, category, labelname), exist_ok=True)
+
         images = KeyDataset(self.dataset, "image")
         filenames = KeyDataset(self.dataset, "filename")
         labelnames = KeyDataset(self.dataset, "labelname")
 
         for image, filename, labelname in tqdm(zip(self.pipe(images), filenames, labelnames), total=len(self.dataset), desc="Segmenting images"):
+            filename = os.path.basename(filename['path'])
+
+            # TODO work on logic below until end of loop/function
             output = image
 
             # Append specified masks to output
@@ -114,13 +124,12 @@ class SSCD(object):
             if 'Face' in labels and ('Left-shoe' in labels or 'Right-shoe' in labels):
                 category = 'good'
 
-            os.makedirs(os.path.join(category, labelname), exist_ok=True)
-            image.save(os.path.join(category, labelname, os.path.basename(filename)))
+            image.save(os.path.join(category, labelname, filename))
 
             # Clipping (only for Label 1)
             if self.label == '1':
                 if len(masks) == 0:
-                    print("Skipping-no masks detected")
+                    print("Skipping-no masks detected") # TODO change to log
                     continue
 
                 stack = np.array(masks[0])
@@ -128,35 +137,31 @@ class SSCD(object):
                     stack += np.array(mask)
 
                 image.putalpha(Image.fromarray(stack))
-                os.makedirs(os.path.join(output_directory, labelname), exist_ok=True)
-                image.save(os.path.join(output_directory, labelname, os.path.basename(filename)))
+                image.save(os.path.join('output', labelname, filename))
 
 
-def main() -> None:
+def main():
     # Input for AI Label One or Two
     ai_label = input("AI Label 1 or 2? (1/2): ").strip()
     if ai_label not in ('1', '2'):
-        print("Bad input")
+        # TODO: Log bad input?
         exit(1)
 
     method = input("Perform skimming in addition to detection (and clipping for Label 1)? (y/n): ").strip().lower()
     sscd = SSCD(f"label{ai_label}")
 
-    # PERFORM SKIMMER
+    # Perform skimmer
     if method in ('y', 'yes'):
-        search = input("Enter your search terms (separate by comma): ").split(',')
+        search = input("Enter your search terms (separate by comma): ").strip() # TODO: Log empty or bad input?
         rounds = int(input("Enter the number of rounds for sifting: "))
-        folder = input("Enter the folder names (separate by comma; leave blank for the same as the search terms): ").split(',')
-        # Format folder output
-        if len(folder) != len(search):
-            folder = search
-
+        folder = search.replace(' ', '-')
+        search = search.split(',')
+        folder = folder.split(',')
         sscd.skimmer(search, folder, rounds)
 
     sscd.load_dataset()
-    # PERFORM DETECTION AND/OR CLIPPING
-    # sscd.clipping("label1background")
-    sscd.detection()
+    # Perform segmentation; includes detection and clipping
+    sscd.image_segmentation()
 
 
 if __name__ == '__main__':

@@ -19,7 +19,7 @@ for filename in os.listdir(input_folder):
             img.thumbnail(target_size, Image.LANCZOS)
 
             # Create a new image with the target size and paste the resized image into it
-            padded_img = Image.new("RGB", target_size, (255, 255, 255))  # black padding
+            padded_img = Image.new("RGB", target_size, (255, 255, 255))  # transparent padding
             left = (target_size[0] - img.size[0]) // 2
             top = (target_size[1] - img.size[1]) // 2
             padded_img.paste(img, (left, top))

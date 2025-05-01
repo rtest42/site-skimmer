@@ -2,11 +2,10 @@ bin/
 include/
 lib/
 
-lib64
+lib64/
 pyvenv.cfg
 
 # Input and output files and directories
-example*.txt
 output/
 input/
 label1/
@@ -15,6 +14,9 @@ test*/
 bad/
 good/
 okay/
+
+# Log files
+*.log
 
 # Output CSV files
 *.csv
