@@ -105,21 +105,22 @@ class SSCD(object):
         # Pass if the percentage of matching border pixels exceeds the threshold
         return color_percentage >= threshold
 
-    def get_color_percentage(self, mask: Image, clr: int = 255) -> float:
+    def get_color_percentage(self, mask: Image, clr: int = 255, threshold: float = 0.25) -> float:
         mask_array = np.array(mask)
         # Works for grayscale. For more colors, use np.all and then np.sum.
         pixels = np.sum(mask_array == clr)
         total_pixels = mask_array.size
-        return pixels / total_pixels
+        percentage = pixels / total_pixels
+        return percentage if percentage >= threshold else 0
     
     def apply_mask(self, img: Image, mask: Image, clr: int = 255) -> Image:
         image_array = np.array(img)
         mask_array = np.array(mask)
         result_array = np.ones_like(image_array, dtype=np.uint8) * clr
-        mask_bool = mask_array == clr
+        mask_bool = (mask_array == clr)
         result_array = result_array.copy()
         for c in range(3):
-            result_array[:, :, c][mask_bool] = image_array[:, :, c][mask_bool]
+            result_array[:, :, c] = np.where(mask_bool, image_array[:, :, c], clr)
         return Image.fromarray(result_array)
 
     def image_segmentation(self) -> None:
@@ -147,16 +148,22 @@ class SSCD(object):
                     if not self.edge_detection(lower_body):
                         lower_body_percentage = self.get_color_percentage(upper_body)
                     if upper_body_percentage > lower_body_percentage:
+                        # Resize mask, resize image, and then apply mask. Do not alter the aspect ratio of the original image
                         image = self.apply_mask(image, upper_body)
-                    else:
+                    elif lower_body_percentage < upper_body_percentage:
+                        # Resize mask, resize image, and then apply mask
                         image = self.apply_mask(image, lower_body)
+                    else:
+                        continue
                 elif upper_body and not lower_body:
                     if self.edge_detection(upper_body):
                         continue
+                    # Resize mask, resize image, and then apply mask
                     image = self.apply_mask(image, upper_body)
                 elif not upper_body and lower_body:
                     if self.edge_detection(lower_body):
                         continue
+                    # Resize mask, resize image, and then apply mask
                     image = self.apply_mask(image, lower_body)
                 else:
                     # TODO log image masks unsuccessful
