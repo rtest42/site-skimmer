@@ -4,7 +4,7 @@ import torch
 import threading
 import os
 import sys
-# import numpy as np
+import numpy as np
 import requests
 import subprocess
 from concurrent.futures import as_completed, ThreadPoolExecutor
@@ -86,11 +86,41 @@ class SSCD(object):
             filtered_results = [url for url in result if '236x' in url]  # Only keep images with a width of 236px
             self.download_images(filtered_results, os.path.join(self.label, 'test', folder))
 
-    def edge_detection(self, img: Image, threshold: float = 0.2) -> bool:
-        pass
+    def edge_detection(self, mask: Image, clr: int = 255, threshold: float = 0.05) -> bool:
+        mask_array = np.array(mask)
+        height, width = mask_array.shape
+        # Define the border pixels: first and last rows, first and last columns
+        top_border = mask_array[0, :]
+        bottom_border = mask_array[-1, :]
+        left_border = mask_array[:, 0]
+        right_border = mask_array[:, -1]
+        # Count the number of border pixels that have the target color
+        border_pixels = 0
+        for border in [top_border, bottom_border, left_border, right_border]:
+            border_pixels += np.sum(border == clr)
+        # Total number of border pixels
+        total_border_pixels = 2 * (width + height - 2)
+        # Calculate the percentage of border pixels that match the target color
+        color_percentage = border_pixels / total_border_pixels
+        # Pass if the percentage of matching border pixels exceeds the threshold
+        return color_percentage >= threshold
 
-    def get_color_percentage(self, img: Image, clr: tuple = (255, 255, 255)) -> float:
-        pass
+    def get_color_percentage(self, mask: Image, clr: int = 255) -> float:
+        mask_array = np.array(mask)
+        # Works for grayscale. For more colors, use np.all and then np.sum.
+        pixels = np.sum(mask_array == clr)
+        total_pixels = mask_array.size
+        return pixels / total_pixels
+    
+    def apply_mask(self, img: Image, mask: Image, clr: int = 255) -> Image:
+        image_array = np.array(img)
+        mask_array = np.array(mask)
+        result_array = np.ones_like(image_array, dtype=np.uint8) * clr
+        mask_bool = mask_array == clr
+        result_array = result_array.copy()
+        for c in range(3):
+            result_array[:, :, c][mask_bool] = image_array[:, :, c][mask_bool]
+        return Image.fromarray(result_array)
 
     def image_segmentation(self) -> None:
         # Make directories
@@ -110,11 +140,24 @@ class SSCD(object):
                 upper_body = masks.get('Upper-clothes')
                 lower_body = masks.get('Pants')
                 if upper_body and lower_body:
-                    pass
+                    upper_body_percentage = 0
+                    lower_body_percentage = 0
+                    if not self.edge_detection(upper_body):
+                        upper_body_percentage = self.get_color_percentage(upper_body)
+                    if not self.edge_detection(lower_body):
+                        lower_body_percentage = self.get_color_percentage(upper_body)
+                    if upper_body_percentage > lower_body_percentage:
+                        image = self.apply_mask(image, upper_body)
+                    else:
+                        image = self.apply_mask(image, lower_body)
                 elif upper_body and not lower_body:
-                    pass
+                    if self.edge_detection(upper_body):
+                        continue
+                    image = self.apply_mask(image, upper_body)
                 elif not upper_body and lower_body:
-                    pass
+                    if self.edge_detection(lower_body):
+                        continue
+                    image = self.apply_mask(image, lower_body)
                 else:
                     # TODO log image masks unsuccessful
                     continue
@@ -125,7 +168,9 @@ class SSCD(object):
                     # TODO check if inverse of background touches edge
                     # Inverse mask
                     background = background.point(lambda x: 255 - x)
-                    # image.putalpha(background)
+                    image = self.apply_mask(image, background)
+                else:
+                    continue
 
             image.save(os.path.join(self.label, 'output', label_name, filename))
             # Logic for handling masks
