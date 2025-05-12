@@ -206,6 +206,9 @@ class SSCD(object):
                 if background:
                     # Inverse mask
                     background = background.point(lambda x: 255 - x)
+                    if self.edge_detection(background):
+                        logging.warning(f"Label 2 image {filename} touches the edge of the image")
+                        continue
                     image = self.apply_mask(image, background)
                     logging.info(f"Label 2 image {filename} successfully saved")
                 else:
