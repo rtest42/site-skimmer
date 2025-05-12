@@ -2,9 +2,37 @@ bin/
 include/
 lib/
 
-lib64
+lib64/
 pyvenv.cfg
 
-example*.txt
-khaki/
+# Input and output files and directories
+output/
+input/
+label1/
+label2/
+test*/
+bad/
+good/
+okay/
+
+# Log files
+*.log
+
+# Output CSV files
 *.csv
+
+# PyCharm
+.idea/
+
+# Image model
+*.h5
+*.pth
+
+# MacOS
+.DS_Store
+
+# Python cache
+__pycache__/
+
+# Pinterest APIs
+data/
