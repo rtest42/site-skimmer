@@ -58,11 +58,11 @@ class SSCD(object):
                 with open(name, 'wb') as file:
                     file.write(response.content)
 
-                print(f"Successfully downloaded and saved {url}")  # TODO convert to logging
+                logging.info(f"Successfully downloaded and saved {url}")
             else:
-                print(f"Status code for {url}: {response.status_code}")  # TODO convert to logging
+                logging.error(f"Status code for {url}: {response.status_code}")
         except requests.exceptions.RequestException as e:
-            print(f"Failed to download {url}: {e}")  # TODO convert to logging
+            logging.error(f"Failed to download {url}: {e}")
 
     def download_images(self, links: list[str], label: str) -> None:
         os.makedirs(label, exist_ok=True)
@@ -86,7 +86,7 @@ class SSCD(object):
             filtered_results = [url for url in result if '236x' in url]  # Only keep images with a width of 236px
             self.download_images(filtered_results, os.path.join(self.label, 'test', folder))
 
-    def edge_detection(self, mask: Image, clr: int = 255, threshold: float = 0.05) -> bool:
+    def edge_detection(self, mask: Image, clr: int = 255, threshold: float = 0.25) -> bool:
         mask_array = np.array(mask)
         height, width = mask_array.shape
         # Define the border pixels: first and last rows, first and last columns
@@ -113,6 +113,15 @@ class SSCD(object):
         percentage = pixels / total_pixels
         return percentage if percentage >= threshold else 0
     
+    def resize_and_pad(self, img: Image, target_size: tuple[int, int] = (224, 224), clr: tuple[int, int, int] = (255, 255, 255)) -> Image:
+        img.thumbnail(target_size, Image.LANCZOS)
+        # Create a new image with the target size and paste the resized image into it
+        left = (target_size[0] - img.size[0]) // 2
+        top = (target_size[1] - img.size[1]) // 2
+        padded_img = Image.new("RGB", target_size, clr)
+        padded_img.paste(img, (left, top))
+        return padded_img
+    
     def apply_mask(self, img: Image, mask: Image, clr: int = 255) -> Image:
         image_array = np.array(img)
         mask_array = np.array(mask)
@@ -138,6 +147,7 @@ class SSCD(object):
             masks = {segment['label']: segment['mask'] for segment in output}
 
             if self.label == 'label1':
+                folder = 'output'
                 upper_body = masks.get('Upper-clothes')
                 lower_body = masks.get('Pants')
                 if upper_body and lower_body:
@@ -148,59 +158,43 @@ class SSCD(object):
                     if not self.edge_detection(lower_body):
                         lower_body_percentage = self.get_color_percentage(upper_body)
                     if upper_body_percentage > lower_body_percentage:
-                        # Resize mask, resize image, and then apply mask. Do not alter the aspect ratio of the original image
                         image = self.apply_mask(image, upper_body)
+                        logging.info(f"Label 1 image {filename} upper body successfully saved")
                     elif lower_body_percentage < upper_body_percentage:
-                        # Resize mask, resize image, and then apply mask
                         image = self.apply_mask(image, lower_body)
+                        logging.info(f"Label 1 image {filename} lower body successfully saved")
                     else:
+                        logging.warning(f"Label 1 image {filename} does not have adequate lower or upper-body clothing")
                         continue
                 elif upper_body and not lower_body:
                     if self.edge_detection(upper_body):
+                        logging.warning(f"Label 1 image {filename} touches the edge of the image")
                         continue
-                    # Resize mask, resize image, and then apply mask
                     image = self.apply_mask(image, upper_body)
+                    logging.info(f"Label 1 image {filename} upper body successfully saved")
                 elif not upper_body and lower_body:
                     if self.edge_detection(lower_body):
+                        logging.warning(f"Label 1 image {filename} touches the edge of the image")
                         continue
-                    # Resize mask, resize image, and then apply mask
                     image = self.apply_mask(image, lower_body)
+                    logging.info(f"Label 1 image {filename} lower body successfully saved")
                 else:
-                    # TODO log image masks unsuccessful
+                    logging.warning(f"Label 1 image {filename} does not have detected lower or upper-body clothing")
                     continue
             elif self.label == 'label2':
-                # Test if background surrounds main image completely
                 background = masks.get('Background')
+                folder = 'good' if ('Face' in masks and ('Left-shoe' in masks or 'Right-shoe' in masks)) else 'bad'
                 if background:
-                    # TODO check if inverse of background touches edge
                     # Inverse mask
                     background = background.point(lambda x: 255 - x)
                     image = self.apply_mask(image, background)
+                    logging.info(f"Label 2 image {filename} successfully saved")
                 else:
+                    logging.warning(f"Label 2 image {filename} not saved")
                     continue
-
-            image.save(os.path.join(self.label, 'output', label_name, filename))
-            # Logic for handling masks
-            # Detection
-            #category = 'bad'
-            #if 'Face' in labels and ('Left-shoe' in labels or 'Right-shoe' in labels):
-            #    category = 'good'
-
-            #image.save(os.path.join(category, label_name, filename))
-
-            # Clipping (only for Label 1)
-            #if self.label == 'label1':
-            #    if len(masks) == 0:
-            #        print("Skipping-no masks detected")  # TODO change to log
-            #        continue
-
-            #    stack = np.array(masks[0])
-            #    for mask in masks:
-            #        stack += np.array(mask)
-
-            #    image.putalpha(Image.fromarray(stack))
-            #    image.save(os.path.join(self.label, 'output', label_name, filename))
-
+            
+            image = self.resize_and_pad(image)
+            image.save(os.path.join(self.label, folder, label_name, filename))
 
 def main() -> int:
     ai_label = input("AI Label 1 or 2? (1/2): ").strip()
@@ -231,9 +225,13 @@ def main() -> int:
 
 if __name__ == '__main__':
     logging.basicConfig(
-        level=logging.INFO,
-        format='[%(asctime)s] %(levelname)s: %(message)s',
-        stream=sys.stderr
+        filename="sscd.log",
+        encoding="utf-8",
+        filemode="a",
+        format="%(asctime)s - %(levelname)s - %(message)s",
+        style="%",
+        datefmt="%Y-%m-%d %H:%M",
+        level=logging.INFO
     )
 
     code = main()
