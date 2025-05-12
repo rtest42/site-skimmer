@@ -151,30 +151,40 @@ class SSCD(object):
                 upper_body = masks.get('Upper-clothes')
                 lower_body = masks.get('Pants')
                 if upper_body and lower_body:
-                    upper_body_percentage = 0
-                    lower_body_percentage = 0
-                    if not self.edge_detection(upper_body):
-                        upper_body_percentage = self.get_color_percentage(upper_body)
-                    if not self.edge_detection(lower_body):
-                        lower_body_percentage = self.get_color_percentage(upper_body)
+                    upper_body_percentage = self.get_color_percentage(upper_body)
+                    logging.info(f"Label 1 image {filename} upper body is {upper_body_percentage * 100}% filled")
+                    lower_body_percentage = self.get_color_percentage(lower_body)
+                    logging.info(f"Label 1 image {filename} lower body is {lower_body_percentage * 100}% filled")
+                    if self.edge_detection(upper_body):
+                        upper_body_percentage = 0
+                        logging.warning(f"Label 1 image {filename} upper body touches the edge of the image")
+                    if self.edge_detection(lower_body):
+                        lower_body_percentage = 0
+                        logging.warning(f"Label 1 image {filename} lower body touches the edge of the image")
                     if upper_body_percentage > lower_body_percentage:
                         image = self.apply_mask(image, upper_body)
                         logging.info(f"Label 1 image {filename} upper body successfully saved")
-                    elif lower_body_percentage < upper_body_percentage:
+                    elif upper_body_percentage < lower_body_percentage:
                         image = self.apply_mask(image, lower_body)
                         logging.info(f"Label 1 image {filename} lower body successfully saved")
                     else:
                         logging.warning(f"Label 1 image {filename} does not have adequate lower or upper-body clothing")
                         continue
                 elif upper_body and not lower_body:
+                    if self.get_color_percentage(upper_body) == 0:
+                        logging.warning(f"Label 1 image {filename} does not have adequate upper-body clothing")
+                        continue
                     if self.edge_detection(upper_body):
-                        logging.warning(f"Label 1 image {filename} touches the edge of the image")
+                        logging.warning(f"Label 1 image {filename} upper body touches the edge of the image")
                         continue
                     image = self.apply_mask(image, upper_body)
                     logging.info(f"Label 1 image {filename} upper body successfully saved")
                 elif not upper_body and lower_body:
+                    if self.get_color_percentage(lower_body) == 0:
+                        logging.warning(f"Label 1 image {filename} does not have adequate lower-body clothing")
+                        continue
                     if self.edge_detection(lower_body):
-                        logging.warning(f"Label 1 image {filename} touches the edge of the image")
+                        logging.warning(f"Label 1 image {filename} lower body touches the edge of the image")
                         continue
                     image = self.apply_mask(image, lower_body)
                     logging.info(f"Label 1 image {filename} lower body successfully saved")
