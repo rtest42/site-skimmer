@@ -1,18 +1,20 @@
 import logging
 import json
-import torch
-import threading
 import os
 import sys
-import numpy as np
-import requests
+import threading
 import subprocess
+
+import numpy as np
+import torch
+import requests
 from concurrent.futures import as_completed, ThreadPoolExecutor
 from PIL import Image
 from datasets import Image as DatasetImage, load_dataset  # Avoid confusion between PIL.Image
 from transformers.pipelines.pt_utils import KeyDataset
 from transformers import pipeline
 from tqdm import tqdm
+
 
 logger = logging.getLogger(__name__)
 

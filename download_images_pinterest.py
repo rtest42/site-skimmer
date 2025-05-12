@@ -1,4 +1,4 @@
-# CODE OBSOLETE DUE TO API ERRORS
+# CODE OBSOLETE DUE TO API ERRORS BUT STAYS HERE FOR REFERENCE
 # 
 # Original code by iamatulsingh at https://github.com/iamatulsingh/pinscrape
 # Made some minor adjustments to get the code running without issues
