@@ -41,7 +41,8 @@ class SSCD(object):
         self.dataset = self.dataset.cast_column("image", DatasetImage(decode=True))
 
     @staticmethod
-    def download_image(session: requests.Session, url: str, label: str, counter: list[int], lock: threading.Lock) -> None:
+    def download_image(session: requests.Session, url: str, label: str,
+                       counter: list[int], lock: threading.Lock) -> None:
         headers = {
             'user-agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) '
                           'Chrome/135.0.0.0 Safari/537.36 Edg/135.0.0.0'
@@ -88,7 +89,8 @@ class SSCD(object):
             filtered_results = [url for url in result if '236x' in url]  # Only keep images with a width of 236px
             self.download_images(filtered_results, os.path.join(self.label, 'test', folder))
 
-    def edge_detection(self, mask: Image, clr: int = 255, threshold: float = 0.25) -> bool:
+    @staticmethod
+    def edge_detection(mask: Image, clr: int = 255, threshold: float = 0.25) -> bool:
         mask_array = np.array(mask)
         height, width = mask_array.shape
         # Define the border pixels: first and last rows, first and last columns
@@ -107,7 +109,8 @@ class SSCD(object):
         # Pass if the percentage of matching border pixels exceeds the threshold
         return color_percentage >= threshold
 
-    def get_color_percentage(self, mask: Image, clr: int = 255, threshold: float = 0.25) -> float:
+    @staticmethod
+    def get_color_percentage(mask: Image, clr: int = 255, threshold: float = 0.25) -> float:
         mask_array = np.array(mask)
         # Works for grayscale. For more colors, use np.all and then np.sum.
         pixels = np.sum(mask_array == clr)
@@ -115,8 +118,10 @@ class SSCD(object):
         percentage = pixels / total_pixels
         return percentage if percentage >= threshold else 0
     
-    def resize_and_pad(self, img: Image, target_size: tuple[int, int] = (224, 224), clr: tuple[int, int, int] = (255, 255, 255)) -> Image:
-        img.thumbnail(target_size, Image.LANCZOS)
+    @staticmethod
+    def resize_and_pad(img: Image, target_size: tuple[int, int] = (224, 224),
+                       clr: tuple[int, int, int] = (255, 255, 255)) -> Image:
+        img.thumbnail(target_size, Image.Resampling.LANCZOS)
         # Create a new image with the target size and paste the resized image into it
         left = (target_size[0] - img.size[0]) // 2
         top = (target_size[1] - img.size[1]) // 2
@@ -124,7 +129,8 @@ class SSCD(object):
         padded_img.paste(img, (left, top))
         return padded_img
     
-    def apply_mask(self, img: Image, mask: Image, clr: int = 255) -> Image:
+    @staticmethod
+    def apply_mask(img: Image, mask: Image, clr: int = 255) -> Image:
         image_array = np.array(img)
         mask_array = np.array(mask)
         result_array = np.ones_like(image_array, dtype=np.uint8) * clr
@@ -147,6 +153,7 @@ class SSCD(object):
             filename = os.path.basename(data['filename']['path'])
             label_name = data['label-name']
             masks = {segment['label']: segment['mask'] for segment in output}
+            folder = ''
 
             if self.label == 'label1':
                 folder = 'output'
@@ -207,6 +214,7 @@ class SSCD(object):
             
             image = self.resize_and_pad(image)
             image.save(os.path.join(self.label, folder, label_name, filename))
+
 
 def main() -> int:
     ai_label = input("AI Label 1 or 2? (1/2): ").strip()
