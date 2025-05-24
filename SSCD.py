@@ -136,14 +136,17 @@ class SSCD(object):
         result_array = np.ones_like(image_array, dtype=np.uint8) * clr
         mask_bool = (mask_array == clr)
         result_array = result_array.copy()
-        for c in range(3):
-            result_array[:, :, c] = np.where(mask_bool, image_array[:, :, c], clr)
+        if image_array.ndim == 3:  # RGB
+            result_array[:, :, :] = np.where(mask_bool[:, :, None], image_array, clr)
+        else:  # Grayscale
+            result_array = np.where(mask_bool, image_array, clr)
         return Image.fromarray(result_array)
 
     def image_segmentation(self) -> None:
         # Make directories
+        categories = ["output"] if self.label == 'label1' else ["bad", "good"]
         for label_name in self.dataset.features['label'].names:
-            for category in ["bad", "good", "output"]:
+            for category in categories:
                 os.makedirs(os.path.join(self.label, category, label_name), exist_ok=True)
 
         images = KeyDataset(self.dataset, "image")
@@ -215,7 +218,7 @@ class SSCD(object):
                     logging.warning(f"Label 2 image {filename} not saved")
                     continue
             
-            image = self.resize_and_pad(image)
+            image = self.resize_and_pad(image, (224, 224) if self.label == 'label1' else (224, 397))
             image.save(os.path.join(self.label, folder, label_name, filename))
 
 

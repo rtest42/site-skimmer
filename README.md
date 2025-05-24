@@ -8,10 +8,10 @@ A webscraper for downloading images of clothing on the internet.
 4. ```pip3 install -r requirements.txt```
 5. ```npm i puppeteer```
 6. (Optional; for virtual environments): ```source bin/activate```
-7. ```python3 SSCD.py```
+7. ```python3 SSCD.py``` and type appropriate inputs in the terminal. A sample output is shown below.
 
 ## Requirements
-[Python 3](https://www.python.org/downloads/)
+[Python 3](https://www.python.org/downloads/)—Use versions 3.9 to 3.12 due to TensorFlow compatibility for now.
 
 [pip](https://docs.python.org/3/installing/index.html)
 
