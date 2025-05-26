@@ -5,6 +5,9 @@ lib/
 lib64/
 pyvenv.cfg
 
+# NodeJS modules
+node_modules/
+
 # Input and output files and directories
 output/
 input/

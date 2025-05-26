@@ -1,10 +1,11 @@
 import puppeteer from 'puppeteer';
 
-async function ScrapeImage(startUrl, maxIterations){
+export async function ScrapeImage(startUrl, maxIterations){
     // Flags
-    let resolution = {"width": 2560, "height": 1440};
-    let heightFlag = 3000;
-    let timeoutFlag = 10000;
+    const resolution = {"width": 2560, "height": 1440};
+    const heightFlag = resolution.height * 2;
+    const timeoutFlag = 10000;
+    const maxScrolls = 10;
 
     const browser = await puppeteer.launch();
     const page = await browser.newPage();
@@ -24,11 +25,12 @@ async function ScrapeImage(startUrl, maxIterations){
             await page.waitForSelector('img', { visible: true, timeout: timeoutFlag });
             
             // Scroll to load images
-            let height = 0;
-            while (height < heightFlag) {
+            let height = 0; 
+            for (let numScrolls = 0; height < heightFlag && numScrolls < maxScrolls; ++numScrolls) {
                 await page.evaluate(() => window.scrollBy(0, window.innerHeight));
                 await new Promise(resolve => setTimeout(resolve, 1500));
                 height = await page.evaluate(() => document.body.scrollHeight);
+                // console.error(`height: ${height}`, `iterations: ${numScrolls}`);
             }
 
             // Collect image URLs
@@ -48,12 +50,10 @@ async function ScrapeImage(startUrl, maxIterations){
             visited_urls.add(url);
             iterations++;
         } catch (err) {
-            console.warn(`Failed on ${url}: ${err.message}`);
+            console.error(`Failed on ${url}:`, err.message);
         }
     }
 
     console.log(JSON.stringify([...download_urls])); // Return value
     await browser.close();
 }
-
-export { ScrapeImage };

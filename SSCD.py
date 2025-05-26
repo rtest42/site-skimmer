@@ -85,12 +85,14 @@ class SSCD(object):
         for search, folder in zip(searches, folders):
             print(f"Searching {search} via Pinterest")
             result = subprocess.run(["node", "puppeteer-main.js", search, str(rounds)], capture_output=True, text=True)
-            result = json.loads(result.stdout.strip())
-            filtered_results = [url for url in result if '236x' in url]  # Only keep images with a width of 236px
+            if result.stderr.strip():
+                print("Debug output:", result.stderr, file=sys.stderr)
+            urls = json.loads(result.stdout.strip())
+            filtered_results = [url for url in urls if '236x' in url]  # Only keep images with a width of 236px
             self.download_images(filtered_results, os.path.join(self.label, 'test', folder))
 
     @staticmethod
-    def edge_detection(mask: Image, clr: int = 255, threshold: float = 0.25) -> bool:
+    def edge_detection(mask: Image.Image, clr: int = 255, threshold: float = 0.25) -> bool:
         mask_array = np.array(mask)
         height, width = mask_array.shape
         # Define the border pixels: first and last rows, first and last columns
@@ -110,7 +112,7 @@ class SSCD(object):
         return color_percentage >= threshold
 
     @staticmethod
-    def get_color_percentage(mask: Image, clr: int = 255, threshold: float = 0.25) -> float:
+    def get_color_percentage(mask: Image.Image, clr: int = 255, threshold: float = 0.25) -> float:
         mask_array = np.array(mask)
         # Works for grayscale. For more colors, use np.all and then np.sum.
         pixels = np.sum(mask_array == clr)
@@ -119,8 +121,8 @@ class SSCD(object):
         return percentage if percentage >= threshold else 0
     
     @staticmethod
-    def resize_and_pad(img: Image, target_size: tuple[int, int] = (224, 224),
-                       clr: tuple[int, int, int] = (255, 255, 255)) -> Image:
+    def resize_and_pad(img: Image.Image, target_size: tuple[int, int] = (224, 224),
+                       clr: tuple[int, int, int] = (255, 255, 255)) -> Image.Image:
         img.thumbnail(target_size, Image.Resampling.LANCZOS)
         # Create a new image with the target size and paste the resized image into it
         left = (target_size[0] - img.size[0]) // 2
@@ -130,7 +132,7 @@ class SSCD(object):
         return padded_img
     
     @staticmethod
-    def apply_mask(img: Image, mask: Image, clr: int = 255) -> Image:
+    def apply_mask(img: Image.Image, mask: Image.Image, clr: int = 255) -> Image.Image:
         image_array = np.array(img)
         mask_array = np.array(mask)
         result_array = np.ones_like(image_array, dtype=np.uint8) * clr
@@ -229,9 +231,10 @@ def main() -> int:
         return 1
 
     sscd = SSCD(f"label{ai_label}")
-    method = input("Perform skimming in addition to detection (and clipping for Label 1)? (y/n): ").strip().lower()
+    skim = input("Perform skimming? (y/n): ").strip().lower()
+    segment = input("Perform detection (and clipping for Label 1)? (y/n): ").strip().lower()
     # Perform skimmer
-    if method in ('y', 'yes'):
+    if skim in ('y', 'yes'):
         search = input("Enter your search terms (separate by comma): ").strip()
         if len(search) == 0:
             print("Search terms are empty", file=sys.stderr)
@@ -243,9 +246,11 @@ def main() -> int:
         folder = folder.split(',')
         sscd.skimmer(search, folder, rounds)
 
-    sscd.load_dataset()
-    # Perform segmentation; includes detection and clipping
-    sscd.image_segmentation()
+    if segment in ('y', 'yes'):
+        sscd.load_dataset()
+        # Perform segmentation; includes detection and clipping
+        sscd.image_segmentation()
+
     return 0
 
 
