@@ -1,8 +1,8 @@
 import puppeteer from 'puppeteer';
 
-export async function ScrapeImage(startUrl, maxIterations){
+export async function ScrapeImage(startUrl, maxIterations, resWidth = 1920, resHeight = 1080){
     // Flags
-    const resolution = {"width": 2560, "height": 1440};
+    const resolution = {"width": resWidth, "height": resHeight};
     const heightFlag = resolution.height * 2;
     const timeoutFlag = 10000;
     const maxScrolls = 10;

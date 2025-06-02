@@ -80,11 +80,11 @@ class SSCD(object):
                     # result = future.result()
                     pbar.update(1)
 
-    def skimmer(self, searches: list[str], folders: list[str], rounds: int) -> None:
+    def skimmer(self, searches: list[str], folders: list[str], rounds: int, width: int = 1920, height: int = 1080) -> None:
         # Skimming is slow on purpose to prevent anti-bot detection
         for search, folder in zip(searches, folders):
             print(f"Searching {search} via Pinterest")
-            result = subprocess.run(["node", "puppeteer-main.js", search, str(rounds)], capture_output=True, text=True)
+            result = subprocess.run(["node", "puppeteer-main.js", search, str(rounds), str(width), str(height)], capture_output=True, text=True)
             if result.stderr.strip():
                 print("Debug output:", result.stderr, file=sys.stderr)
             urls = json.loads(result.stdout.strip())
@@ -244,7 +244,12 @@ def main() -> int:
         folder = search.replace(' ', '-')
         search = search.split(',')
         folder = folder.split(',')
-        sscd.skimmer(search, folder, rounds)
+
+        width = input("Enter the width (blank for default of 1920): ").strip()
+        height = input("Enter the height (blank for default of 1080): ").strip()
+        width = 1920 if len(width) == 0 else int(width)
+        height = 1080 if len(height) == 0 else int(height)
+        sscd.skimmer(search, folder, rounds, width, height)
 
     if segment in ('y', 'yes'):
         sscd.load_dataset()
