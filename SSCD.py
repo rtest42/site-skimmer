@@ -121,7 +121,7 @@ class SSCD(object):
         return percentage if percentage >= threshold else 0
     
     @staticmethod
-    def resize_and_pad(img: Image.Image, target_size: tuple[int, int] = (224, 224),
+    def resize_and_pad(img: Image.Image, target_size: tuple[int, int] = (256, 256),
                        clr: tuple[int, int, int] = (255, 255, 255)) -> Image.Image:
         img.thumbnail(target_size, Image.Resampling.LANCZOS)
         # Create a new image with the target size and paste the resized image into it
@@ -220,7 +220,7 @@ class SSCD(object):
                     logging.warning(f"Label 2 image {filename} not saved")
                     continue
             
-            image = self.resize_and_pad(image, (224, 224) if self.label == 'label1' else (224, 397))
+            image = self.resize_and_pad(image, (256, 256))
             image.save(os.path.join(self.label, folder, label_name, filename))
 
 
