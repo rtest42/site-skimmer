@@ -1,4 +1,4 @@
-# Armasu Site-Skimmer
+# Site-Skimmer
 A webscraper for downloading images of clothing on the internet.
 
 ## Quickstart
