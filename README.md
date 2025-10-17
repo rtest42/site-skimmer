@@ -1,5 +1,5 @@
 # Site-Skimmer
-A webscraper for downloading images of clothing on the internet.
+A webscraper for downloading images on the internet.
 
 ## Quickstart
 1. ```git clone https://github.com/rtest42/site-skimmer.git```
